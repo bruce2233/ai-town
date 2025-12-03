@@ -1,0 +1,23 @@
+# Dependencies
+/node_modules
+/venv
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# TypeScript/JavaScript
+*.log
+.npm
+/dist
+/build
+
+# IDEs
+.vscode/
+.idea/
+
+# OS-specific
+.DS_Store
+Thumbs.db

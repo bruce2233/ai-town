@@ -1,5 +1,6 @@
 import WebSocket from 'ws';
 import OpenAI from 'openai';
+import fs from 'fs/promises';
 
 // Configuration
 const BROKER_URL = 'ws://localhost:8080';
@@ -222,11 +223,50 @@ class Agent {
 
 // Main execution
 async function main() {
+    const creator = new Agent("Creator", "The town's founder. Your purpose is to create new residents with interesting personas when requested by the admin.");
+    creator.registerTool({
+        name: 'create_agent',
+        description: 'Create a new resident in the town.',
+        parameters: {
+            type: 'object',
+            properties: {
+                name: { type: 'string', description: 'The name of the new resident.' },
+                persona: { type: 'string', description: 'A detailed persona for the new resident.' }
+            },
+            required: ['name', 'persona']
+        },
+        execute: async ({ name, persona }) => {
+            const agentsFile = 'agents.jsonl';
+            const agentConfig = JSON.stringify({ name, persona }) + '\n';
+            await fs.appendFile(agentsFile, agentConfig);
+            return `Successfully created agent ${name}.`;
+        }
+    });
+
     const alice = new Agent("Alice", "A friendly resident who loves gardening. You are very chatty.");
     const bob = new Agent("Bob", "A grumpy neighbor who complains about noise. You are brief.");
 
+    await creator.connect();
     await alice.connect();
     await bob.connect();
+
+    // Load dynamic agents
+    const agentsFile = 'agents.jsonl';
+    try {
+        const data = await fs.readFile(agentsFile, 'utf8');
+        const lines = data.trim().split('\n');
+        for (const line of lines) {
+            try {
+                const agentConfig = JSON.parse(line);
+                const agent = new Agent(agentConfig.name, agentConfig.persona);
+                await agent.connect();
+            } catch (e) {
+                console.error('Error parsing agent config:', e);
+            }
+        }
+    } catch (e) {
+        // File doesn't exist, ignore
+    }
 
     // Kick off interaction - Alice messages Bob directly
     setTimeout(() => {
