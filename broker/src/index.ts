@@ -106,13 +106,13 @@ function handleMessage(sender: Client, message: Message) {
 
         case 'publish':
             if (message.topic && message.payload) {
-                // Permission Check: Town Hall is Admin/System only
-                if (message.topic === 'town_hall') {
+                // Permission Check: Town Hall and Create Character are Admin/System only
+                if (message.topic === 'town_hall' || message.topic === 'town:create_character') {
                     // For this local demo, we trust the message.sender if it claims to be 'admin'
                     const isAdmin = sender.id === 'admin' || message.sender === 'admin';
 
                     if (!isAdmin) {
-                        console.warn(`Client ${sender.id} tried to publish to town_hall without permission.`);
+                        console.warn(`Client ${sender.id} tried to publish to ${message.topic} without permission.`);
                         return;
                     }
                 }

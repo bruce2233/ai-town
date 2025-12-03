@@ -129,10 +129,13 @@ function App() {
   const handleAdminBroadcast = (e: React.FormEvent) => {
     e.preventDefault();
     const input = (e.target as HTMLFormElement).elements.namedItem('broadcast') as HTMLInputElement;
+    const topicSelect = (e.target as HTMLFormElement).elements.namedItem('topic') as HTMLSelectElement;
+    const topic = topicSelect.value;
+
     if (input.value && ws.current) {
       ws.current.send(JSON.stringify({
         type: 'publish',
-        topic: 'town_hall',
+        topic: topic,
         sender: 'admin',
         payload: { content: input.value, sender: 'admin' }
       }));
@@ -144,7 +147,11 @@ function App() {
     <main className="main-feed" ref={feedRef}>
       <div className="admin-controls">
         <form onSubmit={handleAdminBroadcast} className="broadcast-form">
-          <input name="broadcast" type="text" placeholder="Broadcast to Town Hall as Admin..." autoComplete="off" />
+          <select name="topic" defaultValue="town_hall" style={{ marginRight: '8px', padding: '8px' }}>
+            <option value="town_hall">Town Hall</option>
+            <option value="town:create_character">Create Character</option>
+          </select>
+          <input name="broadcast" type="text" placeholder="Message..." autoComplete="off" />
           <button type="submit">Send</button>
         </form>
       </div>
