@@ -4,7 +4,7 @@ import './App.css'
 interface Message {
   type: string;
   topic?: string;
-  payload?: any;
+  payload?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   sender?: string;
   timestamp?: number;
 }
@@ -31,6 +31,12 @@ function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const ws = useRef<WebSocket | null>(null);
   const feedRef = useRef<HTMLDivElement>(null);
@@ -58,12 +64,16 @@ function App() {
 
         if (data.type === 'system' && data.payload?.type === 'state_update') {
           setTopics(new Set(data.payload.topics));
-          const newAgents = new Map(agents);
-          data.payload.agents.forEach((a: any) => {
-            const existing = Array.from(newAgents.values()).find(ea => ea.id === a.id);
-            newAgents.set(a.id, { ...existing, ...a, lastSeen: Date.now() });
+          setTopics(new Set(data.payload.topics));
+          setAgents(prev => {
+            const newAgents = new Map(prev);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            data.payload.agents.forEach((a: any) => {
+              const existing = newAgents.get(a.id);
+              newAgents.set(a.id, { ...existing, ...a, lastSeen: Date.now() });
+            });
+            return newAgents;
           });
-          setAgents(newAgents);
         } else if (data.type === 'message') {
           // Main feed only shows town_hall or subscribed topics (excluding system:status)
           if (data.topic !== 'system:status') {
@@ -307,7 +317,7 @@ function App() {
               <div className="agent-info">
                 <div className="agent-name">{agent.name || agent.id.substring(0, 8)}</div>
                 <div className="agent-status">
-                  {agent.processing ? 'Thinking...' : (Date.now() - (agent.lastSeen || 0) < 60000 ? 'Idle' : 'Away')}
+                  {agent.processing ? 'Thinking...' : (currentTime - (agent.lastSeen || 0) < 60000 ? 'Idle' : 'Away')}
                 </div>
               </div>
             </div>
