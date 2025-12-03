@@ -176,7 +176,7 @@ export class Agent extends EventEmitter {
             }
         }));
 
-        let currentMessages: any[] = [
+        const currentMessages: any[] = [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: 'How do you respond? Use tools if necessary, or just reply with text.' }
         ];
