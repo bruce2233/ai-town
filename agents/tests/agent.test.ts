@@ -1,5 +1,6 @@
 import { Agent } from '../src/Agent';
 import WebSocket from 'ws';
+import { jest } from '@jest/globals';
 
 // Mock WebSocket
 jest.mock('ws');
@@ -29,7 +30,6 @@ describe('Agent', () => {
 
     beforeEach(() => {
         // Clear mocks
-        (WebSocket as unknown as jest.Mock).mockClear();
         agent = new Agent('TestAgent', 'TestPersona');
     });
 
