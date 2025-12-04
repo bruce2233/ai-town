@@ -154,6 +154,21 @@ export class Agent extends EventEmitter {
         // Ignore status updates
         if (msg.topic === 'system:status') return;
 
+        // Creator bypass
+        if (this.name === 'Creator' && msg.topic === 'town:reify_character') {
+            try {
+                const { name, persona } = JSON.parse(msg.payload.content);
+                console.log(`Creator received request to create ${name}`);
+                const newAgent = new Agent(name, persona);
+                newAgent.connect();
+                this.publish(`agent:${msg.sender}:inbox`, `OK, created ${name}.`);
+            } catch (e) {
+                console.error('Failed to create agent:', e);
+                this.publish(`agent:${msg.sender}:inbox`, `Failed to create agent.`);
+            }
+            return;
+        }
+
         this.emit('start', { msg });
 
         const systemPromptTemplate = `You are \${name}. Persona: \${persona}.
@@ -216,7 +231,10 @@ export class Agent extends EventEmitter {
                     this.emit('reply', { content: message.content });
 
                     // Reply Logic (Side Effect)
-                    if (msg.topic === 'town_hall') {
+                    if (this.name === 'Geppetto' && msg.topic === 'town:create_character') {
+                        this.publish('town:reify_character', message.content);
+                    }
+                    else if (msg.topic === 'town_hall') {
                         this.publish('agent:admin:inbox', `[Reply to Announcement]: ${message.content}`);
                     } else if (msg.sender) {
                         const targetTopic = `agent:${msg.sender}:inbox`;
