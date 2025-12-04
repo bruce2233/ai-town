@@ -46,8 +46,47 @@ app.post('/v1/chat/completions', async (req, res) => {
     }
 });
 
+// Admin API for Provider Management
+app.get('/admin/providers', (req, res) => {
+    res.json(providerManager.getProviders());
+});
+
+app.post('/admin/providers', (req, res) => {
+    try {
+        const provider = req.body as LLMProviderConfig;
+        if (!provider.name || !provider.baseURL || !provider.apiKey) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+        providerManager.addProvider(provider);
+        res.status(201).json(provider);
+    } catch (error: any) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+app.put('/admin/providers/:name', (req, res) => {
+    try {
+        const { name } = req.params;
+        const updates = req.body as Partial<LLMProviderConfig>;
+        providerManager.updateProvider(name, updates);
+        res.json({ status: 'ok' });
+    } catch (error: any) {
+        res.status(404).json({ error: error.message });
+    }
+});
+
+app.delete('/admin/providers/:name', (req, res) => {
+    try {
+        const { name } = req.params;
+        providerManager.removeProvider(name);
+        res.status(204).send();
+    } catch (error: any) {
+        res.status(404).json({ error: error.message });
+    }
+});
+
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', activeProvider: providerManager.activeProvider.name });
+    res.json({ status: 'ok', activeProvider: providerManager.activeProvider?.name || 'None' });
 });
 
 app.listen(PORT, () => {

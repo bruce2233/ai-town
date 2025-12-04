@@ -13,6 +13,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "dotenv": "^17.2.3",
     "openai": "^4.0.0",
     "ws": "^8.0.0"
   },

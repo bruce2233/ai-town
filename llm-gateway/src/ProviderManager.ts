@@ -16,8 +16,41 @@ export class ProviderManager {
         this.providers = providers.sort((a, b) => a.priority - b.priority);
     }
 
-    get activeProvider(): LLMProviderConfig {
+    get activeProvider(): LLMProviderConfig | undefined {
         return this.providers[this.currentProviderIndex];
+    }
+
+    getProviders(): LLMProviderConfig[] {
+        return this.providers;
+    }
+
+    addProvider(provider: LLMProviderConfig): void {
+        const existing = this.providers.find(p => p.name === provider.name);
+        if (existing) {
+            throw new Error(`Provider with name ${provider.name} already exists.`);
+        }
+        this.providers.push(provider);
+        this.resortProviders();
+    }
+
+    removeProvider(name: string): void {
+        this.providers = this.providers.filter(p => p.name !== name);
+        this.resortProviders();
+    }
+
+    updateProvider(name: string, updates: Partial<LLMProviderConfig>): void {
+        const provider = this.providers.find(p => p.name === name);
+        if (!provider) {
+            throw new Error(`Provider with name ${name} not found.`);
+        }
+        Object.assign(provider, updates);
+        this.resortProviders();
+    }
+
+    private resortProviders() {
+        this.providers.sort((a, b) => a.priority - b.priority);
+        // Reset index if needed, though usually we want to start from 0 on next request anyway
+        this.currentProviderIndex = 0;
     }
 
     async executeRequest(endpoint: string, method: string, data: any): Promise<any> {
@@ -41,6 +74,10 @@ export class ProviderManager {
                 });
 
                 console.log(`[Gateway] Success with provider: ${provider.name}`);
+                this.currentProviderIndex = i; // Remember successful provider? Or always reset?
+                // For failover, we usually want to stick to the highest priority that works,
+                // so we don't update currentProviderIndex permanently unless we want "sticky" sessions.
+                // But here we just return.
                 return response.data;
             } catch (error: any) {
                 console.error(`[Gateway] Failed with provider ${provider.name}:`, error.message);
