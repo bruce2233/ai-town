@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "test": "jest",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "start": "tsx src/index.ts"
   },
   "keywords": [],
   "author": "",
