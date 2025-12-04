@@ -5,7 +5,7 @@ import { ContextState, templateString } from './ContextState';
 
 // Configuration
 export const BROKER_URL = 'ws://localhost:8080';
-export const LLM_API_URL = 'http://192.168.31.21:8082/v1';
+export const LLM_API_URL = 'http://localhost:8081/v1';
 export const LLM_API_KEY = 'dummy';
 export const MODEL_NAME = 'Qwen/Qwen3-4B-Instruct';
 
