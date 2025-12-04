@@ -1,13 +1,14 @@
+import 'dotenv/config';
 import WebSocket from 'ws';
 import OpenAI from 'openai';
 import { EventEmitter } from 'events';
 import { ContextState, templateString } from './ContextState';
 
 // Configuration
-export const BROKER_URL = 'ws://localhost:8080';
-export const LLM_API_URL = 'http://192.168.31.21:8082/v1';
-export const LLM_API_KEY = 'dummy';
-export const MODEL_NAME = 'Qwen/Qwen3-4B-Instruct';
+export const BROKER_URL = process.env.BROKER_URL || 'ws://localhost:8080';
+export const LLM_API_URL = process.env.LLM_API_URL || 'http://192.168.31.21:8082/v1';
+export const LLM_API_KEY = process.env.LLM_API_KEY || 'dummy';
+export const MODEL_NAME = process.env.MODEL_NAME || 'Qwen/Qwen3-4B-Instruct';
 
 export interface Message {
     type: string;
