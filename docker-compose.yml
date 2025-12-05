@@ -5,6 +5,9 @@ services:
     build: ./broker
     ports:
       - "8080:8080"
+    volumes:
+      - ./broker:/app
+      - /app/node_modules
     environment:
       - PORT=8080
       - NODE_ENV=development
@@ -27,6 +30,9 @@ services:
     depends_on:
       - broker
       - llm-gateway
+    volumes:
+      - ./agents:/app
+      - /app/node_modules
     environment:
       - BROKER_URL=ws://broker:8080
       - LLM_API_URL=http://llm-gateway:8081/v1

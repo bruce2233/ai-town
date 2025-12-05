@@ -1,13 +1,21 @@
-import { Agent } from '../src/Agent';
-import WebSocket from 'ws';
 import { jest } from '@jest/globals';
 
 // Mock WebSocket
-jest.mock('ws');
-// Mock OpenAI
-jest.mock('openai', () => {
+jest.unstable_mockModule('ws', () => {
     return {
-        __esModule: true,
+        default: jest.fn().mockImplementation(() => ({
+            on: jest.fn(),
+            send: jest.fn(),
+            readyState: 1, // WebSocket.OPEN
+            close: jest.fn(),
+        })),
+        WebSocket: jest.fn(),
+    };
+});
+
+// Mock OpenAI
+jest.unstable_mockModule('openai', () => {
+    return {
         default: jest.fn().mockImplementation(() => ({
             chat: {
                 completions: {
@@ -18,37 +26,43 @@ jest.mock('openai', () => {
                                 tool_calls: []
                             }
                         }]
-                    })
+                    } as any)
                 }
             }
         }))
     };
 });
 
+// Dynamic imports are needed after mockModule
+const WebSocket = (await import('ws')).default;
+const { Agent } = await import('../src/Agent.js'); // Note the .js extension for ESM imports if needed, or rely on resolution
+
 describe('Agent', () => {
-    let agent: Agent;
+    let agent: any; // Type as any to avoid strict type issues with mocks in test
 
     beforeEach(() => {
         // Clear mocks
+        (WebSocket as unknown as jest.Mock).mockClear();
         agent = new Agent('TestAgent', 'TestPersona');
     });
 
     test('should initialize with correct name and persona', () => {
         expect(agent).toBeDefined();
-        // We can't access private fields easily, but we can check behavior
     });
 
     test('should connect to broker', async () => {
         const connectPromise = agent.connect();
 
         // Simulate WebSocket open
-        const mockWsInstance = (WebSocket as unknown as jest.Mock).mock.instances[0];
+        // When a mock implementation returns an object, we must get it from results, not instances
+        const mockWsInstance = (WebSocket as unknown as jest.Mock).mock.results[0].value as any;
+        // We need to wait a tick for the constructor to be called and instance registered
+        expect(mockWsInstance).toBeDefined();
+
         const openCallback = mockWsInstance.on.mock.calls.find((call: any) => call[0] === 'open')[1];
         openCallback();
 
         await connectPromise;
         expect(WebSocket).toHaveBeenCalled();
     });
-
-    // More complex tests for run() loop would require deeper mocking of OpenAI responses
 });
