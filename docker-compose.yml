@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  broker:
+    build: ./broker
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - NODE_ENV=development
+    networks:
+      - ai-town-net
+
+  llm-gateway:
+    build: ./llm-gateway
+    ports:
+      - "8081:8081"
+    environment:
+      - PORT=8081
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - NODE_ENV=development
+    networks:
+      - ai-town-net
+
+  agents:
+    build: ./agents
+    depends_on:
+      - broker
+      - llm-gateway
+    environment:
+      - BROKER_URL=ws://broker:8080
+      - LLM_API_URL=http://llm-gateway:8081/v1
+      - LLM_API_KEY=${LLM_API_KEY:-dummy}
+      - MODEL_NAME=${MODEL_NAME:-Qwen/Qwen3-4B-Instruct}
+      - NODE_ENV=development
+    networks:
+      - ai-town-net
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_GATEWAY_URL=http://localhost:8081
+      # Note: Frontend runs in browser, so it accesses gateway via localhost (exposed port)
+    networks:
+      - ai-town-net
+
+networks:
+  ai-town-net:
+    driver: bridge
