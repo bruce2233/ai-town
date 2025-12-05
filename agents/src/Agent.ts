@@ -4,10 +4,10 @@ import { EventEmitter } from 'events';
 import { ContextState, templateString } from './ContextState.js';
 
 // Configuration
-export const BROKER_URL = 'ws://localhost:8080';
-export const LLM_API_URL = 'http://192.168.31.21:8082/v1';
-export const LLM_API_KEY = 'dummy';
-export const MODEL_NAME = 'Qwen/Qwen3-4B-Instruct';
+export const BROKER_URL = process.env.BROKER_URL || 'ws://localhost:8080';
+export const LLM_API_URL = process.env.LLM_API_URL || 'http://192.168.31.21:8082/v1';
+export const LLM_API_KEY = process.env.LLM_API_KEY || 'dummy';
+export const MODEL_NAME = process.env.MODEL_NAME || 'Qwen/Qwen3-4B-Instruct';
 
 export interface Message {
   type: string;
@@ -75,12 +75,28 @@ export class Agent extends EventEmitter {
     this.tools.set(tool.name, tool);
   }
 
-  async connect() {
+  async connect(retries = 20, delay = 2000) {
+    for (let i = 0; i < retries; i++) {
+      try {
+        await this.attemptConnection();
+        console.log(`${this.name} successfully connected to broker`);
+        return;
+      } catch (err) {
+        console.error(`${this.name} connection failed (attempt ${i + 1}/${retries}):`, (err as Error).message);
+        if (i < retries - 1) {
+          await new Promise((res) => setTimeout(res, delay));
+        }
+      }
+    }
+    throw new Error(`${this.name} failed to connect to broker after ${retries} attempts`);
+  }
+
+  private attemptConnection(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       this.ws = new WebSocket(BROKER_URL);
 
-      this.ws.on('open', () => {
-        console.log(`${this.name} connected to broker`);
+      const onOpen = () => {
+        // console.log(`${this.name} connected to broker`);
         this.subscribe('town_hall'); // Listen to announcements
         this.subscribe(`agent:${this.name}:inbox`); // Listen to private messages
 
@@ -97,8 +113,22 @@ export class Agent extends EventEmitter {
           );
         }, 5000);
 
+        cleanup();
         resolve();
-      });
+      };
+
+      const onError = (err: Error) => {
+        cleanup();
+        reject(err);
+      };
+
+      const cleanup = () => {
+        this.ws?.removeListener('open', onOpen);
+        this.ws?.removeListener('error', onError);
+      };
+
+      this.ws.on('open', onOpen);
+      this.ws.on('error', onError);
 
       this.ws.on('message', (data) => {
         try {
@@ -112,8 +142,6 @@ export class Agent extends EventEmitter {
           console.error('Error parsing message:', e);
         }
       });
-
-      this.ws.on('error', (err) => reject(err));
     });
   }
 
