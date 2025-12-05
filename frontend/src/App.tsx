@@ -20,7 +20,9 @@ interface AgentStatus {
   history?: Message[];
 }
 
-type View = 'dashboard' | 'topics' | 'agents';
+import { ProviderSettings } from './ProviderSettings';
+
+type View = 'dashboard' | 'topics' | 'agents' | 'settings';
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -300,6 +302,7 @@ function App() {
           <button className={currentView === 'dashboard' ? 'active' : ''} onClick={() => setCurrentView('dashboard')}>Dashboard</button>
           <button className={currentView === 'topics' ? 'active' : ''} onClick={() => setCurrentView('topics')}>Topics</button>
           <button className={currentView === 'agents' ? 'active' : ''} onClick={() => setCurrentView('agents')}>Agents</button>
+          <button className={currentView === 'settings' ? 'active' : ''} onClick={() => setCurrentView('settings')}>Settings</button>
         </nav>
         <div className={`status-indicator ${connected ? 'online' : 'offline'}`}>
           <div className="dot"></div>
@@ -330,6 +333,7 @@ function App() {
         {currentView === 'dashboard' && renderDashboard()}
         {currentView === 'topics' && renderTopics()}
         {currentView === 'agents' && renderAgents()}
+        {currentView === 'settings' && <ProviderSettings />}
       </div>
 
       {/* Visualizer / Stats */}
