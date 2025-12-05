@@ -4,8 +4,10 @@ import WebSocket from 'ws';
 const BROKER_URL = 'ws://localhost:8080';
 
 // Helper to wait for meaningful messages
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function waitForMessage(ws: WebSocket, type: string): Promise<any> {
     return new Promise((resolve) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const handler = (data: any) => {
             const msg = JSON.parse(data.toString());
             if (msg.type === type) {
@@ -17,8 +19,10 @@ function waitForMessage(ws: WebSocket, type: string): Promise<any> {
     });
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function waitForStatus(ws: WebSocket, status: string): Promise<any> {
     return new Promise((resolve) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const handler = (data: any) => {
             const msg = JSON.parse(data.toString());
             if (msg.type === 'system' && msg.payload.status === status) {

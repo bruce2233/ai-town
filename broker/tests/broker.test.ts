@@ -47,6 +47,7 @@ describe('Broker', () => {
         ws.on('message', (data) => {
             const msg = JSON.parse(data.toString());
             if (msg.type === 'system' && msg.payload.type === 'state_update') {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const myAgent = msg.payload.agents.find((a: any) => a.subscriptions.includes('town_hall'));
                 if (myAgent) {
                     ws.close();

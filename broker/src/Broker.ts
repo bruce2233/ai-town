@@ -14,6 +14,7 @@ if (!fs.existsSync(LOG_FILE)) {
 export interface Message {
     type: 'subscribe' | 'publish' | 'system' | 'get_state' | 'create_topic' | 'add_permission' | 'identify' | 'get_history';
     topic?: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     payload?: any;
     sender?: string;
     timestamp?: number;
@@ -57,7 +58,7 @@ export class Broker {
         });
     }
 
-    private logEvent(event: any) {
+    private logEvent(event: Record<string, unknown>) {
         const line = JSON.stringify({ ...event, timestamp: Date.now() }) + '\n';
         fs.appendFile(LOG_FILE, line, (err) => {
             if (err) console.error('Failed to log event:', err);
@@ -174,7 +175,7 @@ export class Broker {
                     const data = fs.readFileSync(LOG_FILE, 'utf-8');
                     const lines = data.trim().split('\n');
                     const events = lines.slice(-100).map(line => {
-                        try { return JSON.parse(line); } catch (e) { return null; }
+                        try { return JSON.parse(line); } catch { return null; }
                     }).filter(e => e !== null);
 
                     sender.ws.send(JSON.stringify({

@@ -26,6 +26,7 @@ jest.unstable_mockModule('openai', () => {
                                 tool_calls: []
                             }
                         }]
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     } as any)
                 }
             }
@@ -38,6 +39,7 @@ const WebSocket = (await import('ws')).default;
 const { Agent } = await import('../src/Agent.js'); // Note the .js extension for ESM imports if needed, or rely on resolution
 
 describe('Agent', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let agent: any; // Type as any to avoid strict type issues with mocks in test
 
     beforeEach(() => {
@@ -55,10 +57,12 @@ describe('Agent', () => {
 
         // Simulate WebSocket open
         // When a mock implementation returns an object, we must get it from results, not instances
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const mockWsInstance = (WebSocket as unknown as jest.Mock).mock.results[0].value as any;
         // We need to wait a tick for the constructor to be called and instance registered
         expect(mockWsInstance).toBeDefined();
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const openCallback = mockWsInstance.on.mock.calls.find((call: any) => call[0] === 'open')[1];
         openCallback();
 

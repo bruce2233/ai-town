@@ -12,6 +12,7 @@ export const MODEL_NAME = 'Qwen/Qwen3-4B-Instruct';
 export interface Message {
   type: string;
   topic?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   payload?: any;
   sender?: string;
 }
@@ -20,6 +21,7 @@ export interface Tool {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   execute: (args: any) => Promise<string>;
 }
 
@@ -196,6 +198,7 @@ export class Agent extends EventEmitter {
       },
     }));
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const currentMessages: any[] = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: 'How do you respond? Use tools if necessary, or just reply with text.' },
@@ -261,31 +264,47 @@ export class Agent extends EventEmitter {
    * Processes a list of function calls, executing each one and collecting their responses.
    * Mimics SubAgentScope.processFunctionCalls.
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async executeTool(name: string, args: any): Promise<string> {
+    const tool = this.tools.get(name);
+
+    let resultContent = '';
+
+    if (tool) {
+      console.log(`${this.name} executing tool ${tool.name}`);
+      try {
+        const result = await tool.execute(args);
+        console.log(`${this.name} tool result: ${result}`);
+        resultContent = result;
+        this.emit('tool_result', { name: name, result });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } catch (e: any) {
+        console.error(`${this.name} tool execution failed:`, e);
+        resultContent = `Error: ${e.message}`;
+        this.emit('tool_error', { name: name, error: e.message });
+      }
+    } else {
+      resultContent = `Error: Tool ${name} not found`;
+    }
+
+    return resultContent;
+  }
+
+  /**
+   * Processes a list of function calls, executing each one and collecting their responses.
+   * Mimics SubAgentScope.processFunctionCalls.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async processFunctionCalls(toolCalls: any[]): Promise<any[]> {
     const results = [];
 
     for (const toolCall of toolCalls) {
-      const toolName = toolCall.function.name;
-      const tool = this.tools.get(toolName);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const toolName = (toolCall as any).function.name;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const args = JSON.parse((toolCall as any).function.arguments);
 
-      let resultContent = '';
-
-      if (tool) {
-        console.log(`${this.name} executing tool ${tool.name}`);
-        try {
-          const args = JSON.parse(toolCall.function.arguments);
-          const result = await tool.execute(args);
-          console.log(`${this.name} tool result: ${result}`);
-          resultContent = result;
-          this.emit('tool_result', { name: toolName, result });
-        } catch (e: any) {
-          console.error(`${this.name} tool execution failed:`, e);
-          resultContent = `Error: ${e.message}`;
-          this.emit('tool_error', { name: toolName, error: e.message });
-        }
-      } else {
-        resultContent = `Error: Tool ${toolName} not found`;
-      }
+      const resultContent = await this.executeTool(toolName, args);
 
       results.push({
         role: 'tool',
