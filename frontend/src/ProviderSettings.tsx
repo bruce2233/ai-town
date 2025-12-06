@@ -63,6 +63,8 @@ export function ProviderSettings() {
         <div className="provider-settings">
             <h2>LLM Providers</h2>
 
+            <GlobalModelConfig />
+
             <div className="provider-list">
                 {providers.map(p => (
                     <div key={p.name} className="provider-card">
@@ -109,6 +111,46 @@ export function ProviderSettings() {
                     {loading ? 'Adding...' : 'Add Provider'}
                 </button>
             </form>
+        </div>
+    );
+}
+
+function GlobalModelConfig() {
+    const [currentModel, setCurrentModel] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8081';
+                const res = await fetch(`${gatewayUrl}/admin/config`);
+                const data = await res.json();
+                setCurrentModel(data.model);
+            } catch (e) {
+                console.error('Failed to fetch config', e);
+            }
+        };
+
+        fetchConfig();
+        // Poll every 5 seconds to keep sync if changed elsewhere
+        const interval = setInterval(fetchConfig, 5000);
+        return () => clearInterval(interval);
+    }, []);
+
+    return (
+        <div className="global-config" style={{
+            background: '#f0f7ff',
+            padding: '12px',
+            borderRadius: '6px',
+            marginBottom: '20px',
+            border: '1px solid #cce3ff'
+        }}>
+            <h3 style={{ marginTop: 0, fontSize: '1rem' }}>Global Default Model</h3>
+            <p style={{ margin: '4px 0', fontSize: '0.9rem' }}>
+                Currently active model: <strong>{currentModel || 'Not set (using agent defaults)'}</strong>
+            </p>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: '#666' }}>
+                This model will override all specific agent configurations. Select a model below to set it.
+            </p>
         </div>
     );
 }
@@ -185,8 +227,45 @@ function ModelList({ providerName }: { providerName: string }) {
                     <h4 style={{ margin: '0 0 4px 0', fontSize: '0.9rem' }}>Available Models:</h4>
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                         {models.map((m: Model, i: number) => (
-                            <li key={m.id || i} style={{ fontSize: '0.8rem', padding: '2px 0', borderBottom: '1px solid #eee' }}>
-                                {m.id || JSON.stringify(m)}
+                            <li key={m.id || i} style={{
+                                fontSize: '0.8rem',
+                                padding: '4px 0',
+                                borderBottom: '1px solid #eee',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                            }}>
+                                <span title={m.id}>{m.id || JSON.stringify(m)}</span>
+                                <button
+                                    onClick={async () => {
+                                        if (!confirm(`Set global model to ${m.id}?`)) return;
+                                        try {
+                                            const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8081';
+                                            await fetch(`${gatewayUrl}/admin/config`, {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ model: m.id })
+                                            });
+                                            // Trigger reload effectively by waiting for poll or manual
+                                            alert(`Global model set to ${m.id}`);
+                                        } catch (e) {
+                                            alert('Failed to set model');
+                                            console.error(e);
+                                        }
+                                    }}
+                                    style={{
+                                        marginLeft: '8px',
+                                        padding: '2px 6px',
+                                        cursor: 'pointer',
+                                        fontSize: '0.7rem',
+                                        background: '#2196F3',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '3px'
+                                    }}
+                                >
+                                    Select
+                                </button>
                             </li>
                         ))}
                     </ul>
