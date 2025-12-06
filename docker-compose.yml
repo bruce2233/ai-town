@@ -21,6 +21,8 @@ services:
     environment:
       - PORT=8081
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - LLM_PROVIDER_URL=${LLM_PROVIDER_URL}
+      - LLM_PROVIDER_KEY=${LLM_PROVIDER_KEY}
       - NODE_ENV=development
     networks:
       - ai-town-net

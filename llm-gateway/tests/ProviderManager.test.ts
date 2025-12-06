@@ -1,4 +1,8 @@
+import axios from 'axios';
 import { ProviderManager, LLMProviderConfig } from '../src/ProviderManager';
+
+jest.mock('axios');
+const mockedAxios = axios as jest.MockedFunction<typeof axios>;
 
 describe('ProviderManager', () => {
     let manager: ProviderManager;
@@ -19,7 +23,10 @@ describe('ProviderManager', () => {
 
     beforeEach(() => {
         manager = new ProviderManager([mockProvider1]);
+        jest.clearAllMocks();
     });
+
+    // ... existing tests ...
 
     test('should initialize with providers sorted by priority', () => {
         manager = new ProviderManager([mockProvider1, mockProvider2]);
@@ -49,13 +56,28 @@ describe('ProviderManager', () => {
 
     test('should update a provider and resort', () => {
         manager.addProvider(mockProvider2);
-        // Provider2 (5) is first, Provider1 (10) is second
-
-        // Update Provider1 to have priority 1 (highest)
         manager.updateProvider('Provider1', { priority: 1 });
-
         const providers = manager.getProviders();
         expect(providers[0].name).toBe('Provider1');
         expect(providers[1].name).toBe('Provider2');
+    });
+
+    test('fetchModels should call correct endpoint', async () => {
+        mockedAxios.mockResolvedValue({ data: { data: [{ id: 'model1' }] } });
+        const models = await manager.fetchModels('Provider1');
+        expect(models).toEqual({ data: [{ id: 'model1' }] });
+        expect(mockedAxios).toHaveBeenCalledWith({
+            method: 'GET',
+            url: 'http://p1/models',
+            headers: {
+                'Authorization': 'Bearer k1',
+                'Content-Type': 'application/json'
+            },
+            timeout: 10000
+        });
+    });
+
+    test('fetchModels should throw if provider not found', async () => {
+        await expect(manager.fetchModels('NonExistent')).rejects.toThrow('Provider with name NonExistent not found');
     });
 });

@@ -14,11 +14,11 @@ const PORT = process.env.PORT || 8081;
 // Configuration - In a real app, this would come from a config file or DB
 const providers: LLMProviderConfig[] = [
     {
-        name: 'Local Qwen',
-        baseURL: 'http://192.168.31.21:8082/v1',
-        apiKey: 'dummy',
+        name: 'Custom Provider',
+        baseURL: process.env.LLM_PROVIDER_URL || 'http://host.docker.internal:8082/v1',
+        apiKey: process.env.LLM_PROVIDER_KEY || 'dummy',
         priority: 1,
-        timeout: 5000 // Fast timeout for local
+        timeout: 10000
     },
     {
         name: 'OpenAI Mock (Fallback)',
@@ -40,6 +40,23 @@ app.post('/v1/chat/completions', async (req, res) => {
         res.status(502).json({
             error: {
                 message: 'Bad Gateway: All LLM providers failed.',
+                details: error.message
+            }
+        });
+    }
+});
+
+// OpenAI-compatible Models Endpoint
+app.get('/v1/models', async (req, res) => {
+    try {
+        // Just use the active or first provider for general "available models" discovery
+        // This is a simplification; ideally we'd aggregation or use a specific "discovery" provider
+        const result = await providerManager.executeRequest('/models', 'GET', null);
+        res.json(result);
+    } catch (error: any) {
+        res.status(502).json({
+            error: {
+                message: 'Bad Gateway: Failed to fetch models.',
                 details: error.message
             }
         });
@@ -82,6 +99,16 @@ app.delete('/admin/providers/:name', (req, res) => {
         res.status(204).send();
     } catch (error: any) {
         res.status(404).json({ error: error.message });
+    }
+});
+
+app.get('/admin/providers/:name/models', async (req, res) => {
+    try {
+        const { name } = req.params;
+        const result = await providerManager.fetchModels(name);
+        res.json(result);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
     }
 });
 

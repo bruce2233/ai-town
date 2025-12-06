@@ -72,6 +72,7 @@ export function ProviderSettings() {
                                 <span className="tag">Priority: {p.priority}</span>
                                 <span className="url">{p.baseURL}</span>
                             </div>
+                            <ModelList providerName={p.name} />
                         </div>
                         <button onClick={() => handleDelete(p.name)} className="delete-btn">Delete</button>
                     </div>
@@ -108,6 +109,84 @@ export function ProviderSettings() {
                     {loading ? 'Adding...' : 'Add Provider'}
                 </button>
             </form>
+        </div>
+    );
+}
+
+function ModelList({ providerName }: { providerName: string }) {
+    const [models, setModels] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [visible, setVisible] = useState(false);
+
+    const checkModels = async () => {
+        if (visible && models.length > 0) {
+            setVisible(false);
+            return;
+        }
+
+        setLoading(true);
+        setError(null);
+        try {
+            const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8081';
+            const res = await fetch(`${gatewayUrl}/admin/providers/${providerName}/models`);
+            if (!res.ok) throw new Error(await res.text());
+            const data = await res.json();
+            // Standardize response: some providers return { data: [...] }, others might be [...]
+            const list = Array.isArray(data) ? data : (data.data || []);
+            setModels(list);
+            setVisible(true);
+        } catch (e: any) {
+            setError(e.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="model-list-section" style={{ marginTop: '10px' }}>
+            <button
+                className="check-models-btn"
+                onClick={checkModels}
+                disabled={loading}
+                type="button"
+                style={{
+                    padding: '4px 8px',
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                    backgroundColor: '#e0e0e0',
+                    border: '1px solid #ccc',
+                    borderRadius: '4px'
+                }}
+            >
+                {loading ? 'Checking...' : (visible ? 'Hide Models' : 'Check Models')}
+            </button>
+
+            {error && <div className="error-msg" style={{ color: 'red', fontSize: '0.8rem', marginTop: '4px' }}>{error}</div>}
+
+            {visible && models.length > 0 && (
+                <div className="models-dropdown" style={{
+                    marginTop: '8px',
+                    maxHeight: '150px',
+                    overflowY: 'auto',
+                    background: '#f9f9f9',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    border: '1px solid #eee'
+                }}>
+                    <h4 style={{ margin: '0 0 4px 0', fontSize: '0.9rem' }}>Available Models:</h4>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                        {models.map((m: any, i: number) => (
+                            <li key={m.id || i} style={{ fontSize: '0.8rem', padding: '2px 0', borderBottom: '1px solid #eee' }}>
+                                {m.id || m.name || JSON.stringify(m)}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+            {visible && models.length === 0 && !error && (
+                <div className="info-msg" style={{ fontSize: '0.8rem', marginTop: '4px', fontStyle: 'italic' }}>No models found directly.</div>
+            )}
         </div>
     );
 }
