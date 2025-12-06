@@ -4,14 +4,15 @@ import { EventEmitter } from 'events';
 import { ContextState, templateString } from './ContextState.js';
 
 // Configuration
-export const BROKER_URL = 'ws://localhost:8080';
-export const LLM_API_URL = 'http://192.168.31.21:8082/v1';
-export const LLM_API_KEY = 'dummy';
-export const MODEL_NAME = 'Qwen/Qwen3-4B-Instruct';
+export const BROKER_URL = process.env.BROKER_URL || 'ws://localhost:8080';
+export const LLM_API_URL = process.env.LLM_API_URL || 'http://192.168.31.21:8082/v1';
+export const LLM_API_KEY = process.env.LLM_API_KEY || 'dummy';
+export const MODEL_NAME = process.env.MODEL_NAME || 'Qwen/Qwen3-4B-Instruct';
 
 export interface Message {
   type: string;
   topic?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   payload?: any;
   sender?: string;
 }
@@ -20,6 +21,7 @@ export interface Tool {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   execute: (args: any) => Promise<string>;
 }
 
@@ -73,12 +75,28 @@ export class Agent extends EventEmitter {
     this.tools.set(tool.name, tool);
   }
 
-  async connect() {
+  async connect(retries = 20, delay = 2000) {
+    for (let i = 0; i < retries; i++) {
+      try {
+        await this.attemptConnection();
+        console.log(`${this.name} successfully connected to broker`);
+        return;
+      } catch (err) {
+        console.error(`${this.name} connection failed (attempt ${i + 1}/${retries}):`, (err as Error).message);
+        if (i < retries - 1) {
+          await new Promise((res) => setTimeout(res, delay));
+        }
+      }
+    }
+    throw new Error(`${this.name} failed to connect to broker after ${retries} attempts`);
+  }
+
+  private attemptConnection(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       this.ws = new WebSocket(BROKER_URL);
 
-      this.ws.on('open', () => {
-        console.log(`${this.name} connected to broker`);
+      const onOpen = () => {
+        // console.log(`${this.name} connected to broker`);
         this.subscribe('town_hall'); // Listen to announcements
         this.subscribe(`agent:${this.name}:inbox`); // Listen to private messages
 
@@ -95,8 +113,22 @@ export class Agent extends EventEmitter {
           );
         }, 5000);
 
+        cleanup();
         resolve();
-      });
+      };
+
+      const onError = (err: Error) => {
+        cleanup();
+        reject(err);
+      };
+
+      const cleanup = () => {
+        this.ws?.removeListener('open', onOpen);
+        this.ws?.removeListener('error', onError);
+      };
+
+      this.ws.on('open', onOpen);
+      this.ws.on('error', onError);
 
       this.ws.on('message', (data) => {
         try {
@@ -110,8 +142,6 @@ export class Agent extends EventEmitter {
           console.error('Error parsing message:', e);
         }
       });
-
-      this.ws.on('error', (err) => reject(err));
     });
   }
 
@@ -196,6 +226,7 @@ export class Agent extends EventEmitter {
       },
     }));
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const currentMessages: any[] = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: 'How do you respond? Use tools if necessary, or just reply with text.' },
@@ -261,31 +292,47 @@ export class Agent extends EventEmitter {
    * Processes a list of function calls, executing each one and collecting their responses.
    * Mimics SubAgentScope.processFunctionCalls.
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async executeTool(name: string, args: any): Promise<string> {
+    const tool = this.tools.get(name);
+
+    let resultContent = '';
+
+    if (tool) {
+      console.log(`${this.name} executing tool ${tool.name}`);
+      try {
+        const result = await tool.execute(args);
+        console.log(`${this.name} tool result: ${result}`);
+        resultContent = result;
+        this.emit('tool_result', { name: name, result });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } catch (e: any) {
+        console.error(`${this.name} tool execution failed:`, e);
+        resultContent = `Error: ${e.message}`;
+        this.emit('tool_error', { name: name, error: e.message });
+      }
+    } else {
+      resultContent = `Error: Tool ${name} not found`;
+    }
+
+    return resultContent;
+  }
+
+  /**
+   * Processes a list of function calls, executing each one and collecting their responses.
+   * Mimics SubAgentScope.processFunctionCalls.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async processFunctionCalls(toolCalls: any[]): Promise<any[]> {
     const results = [];
 
     for (const toolCall of toolCalls) {
-      const toolName = toolCall.function.name;
-      const tool = this.tools.get(toolName);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const toolName = (toolCall as any).function.name;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const args = JSON.parse((toolCall as any).function.arguments);
 
-      let resultContent = '';
-
-      if (tool) {
-        console.log(`${this.name} executing tool ${tool.name}`);
-        try {
-          const args = JSON.parse(toolCall.function.arguments);
-          const result = await tool.execute(args);
-          console.log(`${this.name} tool result: ${result}`);
-          resultContent = result;
-          this.emit('tool_result', { name: toolName, result });
-        } catch (e: any) {
-          console.error(`${this.name} tool execution failed:`, e);
-          resultContent = `Error: ${e.message}`;
-          this.emit('tool_error', { name: toolName, error: e.message });
-        }
-      } else {
-        resultContent = `Error: Tool ${toolName} not found`;
-      }
+      const resultContent = await this.executeTool(toolName, args);
 
       results.push({
         role: 'tool',

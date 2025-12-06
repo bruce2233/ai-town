@@ -50,9 +50,11 @@ function App() {
 
     socket.onopen = () => {
       setConnected(true);
+      socket.send(JSON.stringify({ type: 'identify', payload: { id: 'Observer' } }));
       socket.send(JSON.stringify({ type: 'subscribe', topic: 'town_hall' }));
       socket.send(JSON.stringify({ type: 'subscribe', topic: '*' })); // Subscribe to Firehose
       socket.send(JSON.stringify({ type: 'get_state' }));
+      socket.send(JSON.stringify({ type: 'get_history' }));
     };
 
     socket.onmessage = (event) => {
@@ -61,7 +63,12 @@ function App() {
 
         // Firehose
         if (data.type === 'message' || data.type === 'system') {
-          setAllEvents(prev => [data, ...prev].slice(0, 500)); // Keep last 500
+          if (data.payload?.type === 'history_replay') {
+            console.log('Received history:', data.payload.events.length);
+            setAllEvents(prev => [...data.payload.events, ...prev].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 500));
+          } else {
+            setAllEvents(prev => [data, ...prev].slice(0, 500)); // Keep last 500
+          }
         }
 
         if (data.type === 'system' && data.payload?.type === 'state_update') {
@@ -191,22 +198,42 @@ function App() {
     </main>
   );
 
+  const [topicFilter, setTopicFilter] = useState('');
+
   const renderTopics = () => (
     <main className="main-feed">
+      <div className="filter-bar" style={{ padding: '0 24px', marginBottom: '-10px' }}>
+        <input
+          type="text"
+          placeholder="Filter topics..."
+          value={topicFilter}
+          onChange={(e) => setTopicFilter(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '12px',
+            borderRadius: '8px',
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--glass-border)',
+            color: 'white'
+          }}
+        />
+      </div>
       <div className="grid-view">
-        {Array.from(topics).map(topic => (
-          <div key={topic} className={`card ${selectedTopic === topic ? 'selected' : ''}`} onClick={() => setSelectedTopic(topic)}>
-            <h3>#{topic}</h3>
-            <p>{messages.filter(m => m.topic === topic).length} messages</p>
-          </div>
-        ))}
+        {Array.from(topics)
+          .filter(t => t.toLowerCase().includes(topicFilter.toLowerCase()))
+          .map(topic => (
+            <div key={topic} className={`card ${selectedTopic === topic ? 'selected' : ''}`} onClick={() => setSelectedTopic(topic)}>
+              <h3>#{topic}</h3>
+              <p>{messages.filter(m => m.topic === topic).length} messages</p>
+            </div>
+          ))}
       </div>
       {selectedTopic && (
         <div className="topic-detail">
           <h3>Messages in #{selectedTopic}</h3>
-          {messages.filter(m => m.topic === selectedTopic).slice(-5).map((msg, i) => (
-            <div key={i} className="mini-msg">
-              <b>{msg.sender}:</b> {JSON.stringify(msg.payload)}
+          {messages.filter(m => m.topic === selectedTopic).slice(-20).map((msg, i) => (
+            <div key={i} className="mini-msg" style={{ padding: '8px', borderBottom: '1px solid #333' }}>
+              <b style={{ color: 'var(--accent-primary)' }}>{msg.sender}:</b> {typeof msg.payload === 'string' ? msg.payload : JSON.stringify(msg.payload)}
             </div>
           ))}
         </div>
