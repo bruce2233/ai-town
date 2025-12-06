@@ -94,4 +94,118 @@ describe('Broker', () => {
             });
         });
     });
+
+    test('should support wildcard (*) subscription', (done) => {
+        const subscriber = new WebSocket(`ws://localhost:${PORT}`);
+        const publisher = new WebSocket(`ws://localhost:${PORT}`);
+
+        // Use a random topic to avoid collision
+        const TOPIC = 'wildcard_test_topic_' + Math.random().toString(36).substring(7);
+
+        let subReady = false;
+        let pubReady = false;
+
+        const checkStart = () => {
+            if (subReady && pubReady) {
+                publisher.send(JSON.stringify({
+                    type: 'publish',
+                    topic: TOPIC,
+                    payload: { content: 'Wildcard Test' }
+                }));
+            }
+        };
+
+        subscriber.on('open', () => {
+            subscriber.send(JSON.stringify({ type: 'subscribe', topic: '*' }));
+        });
+
+        subscriber.on('message', (data) => {
+            const msg = JSON.parse(data.toString());
+            // Confirm subscription success
+            if (msg.type === 'system' && msg.payload.status === 'subscribed' && msg.payload.topic === '*') {
+                subReady = true;
+                checkStart();
+            }
+            // Confirm received message
+            if (msg.type === 'message' && msg.payload.content === 'Wildcard Test') {
+                subscriber.close();
+                publisher.close();
+                done();
+            }
+        });
+
+        publisher.on('open', () => {
+            publisher.send(JSON.stringify({
+                type: 'create_topic',
+                payload: { name: TOPIC, type: 'public' }
+            }));
+        });
+
+        publisher.on('message', (data) => {
+            const msg = JSON.parse(data.toString());
+            if (msg.type === 'system' && msg.payload.status === 'topic_created') {
+                pubReady = true;
+                checkStart();
+            }
+        });
+    });
+
+    test('should emit event internally on publish', (done) => {
+        const client = new WebSocket(`ws://localhost:${PORT}`);
+        const TOPIC = 'event_test_topic_' + Math.random().toString(36).substring(7);
+
+        // Hook into internal event emitter
+        broker.once('message', (msg) => {
+            if (msg.payload && msg.payload.content === 'Event Test') {
+                client.close();
+                done();
+            }
+        });
+
+        client.on('open', () => {
+            client.send(JSON.stringify({
+                type: 'create_topic',
+                payload: { name: TOPIC, type: 'public' }
+            }));
+        });
+
+        client.on('message', (data) => {
+            const msg = JSON.parse(data.toString());
+            if (msg.type === 'system' && msg.payload.status === 'topic_created') {
+                client.send(JSON.stringify({
+                    type: 'publish',
+                    topic: TOPIC,
+                    payload: { content: 'Event Test' }
+                }));
+            }
+        });
+    });
+
+    test('should allow internalPublish to reach subscribers', (done) => {
+        const client = new WebSocket(`ws://localhost:${PORT}`);
+        const TOPIC = 'internal_test_topic_' + Math.random().toString(36).substring(7);
+
+        client.on('open', () => {
+            // Create topic first
+            client.send(JSON.stringify({
+                type: 'create_topic',
+                payload: { name: TOPIC, type: 'public' }
+            }));
+        });
+
+        client.on('message', (data) => {
+            const msg = JSON.parse(data.toString());
+            if (msg.type === 'system' && msg.payload.status === 'topic_created') {
+                client.send(JSON.stringify({ type: 'subscribe', topic: TOPIC }));
+            }
+            if (msg.type === 'system' && msg.payload.status === 'subscribed') {
+                // Trigger internal publish
+                broker.internalPublish(TOPIC, 'Internal Hello', 'system_service');
+            }
+            if (msg.type === 'message' && msg.payload.content === 'Internal Hello') {
+                client.close();
+                done();
+            }
+        });
+    });
 });
