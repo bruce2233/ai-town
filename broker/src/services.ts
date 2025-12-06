@@ -1,8 +1,5 @@
 import { Broker, Message } from './Broker';
 
-const PORT = 8080;
-const broker = new Broker(PORT);
-
 // --- Timeline Service ---
 export function setupTimeline(broker: Broker) {
     // Simple logger that captures all non-system events
@@ -52,8 +49,3 @@ export function setupAnalyst(broker: Broker) {
         }
     });
 }
-
-setupTimeline(broker);
-setupAnalyst(broker);
-
-broker.start();
