@@ -34,6 +34,9 @@ function App() {
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const componentId = useRef(Math.random().toString(36).slice(2, 9)).current;
+
+  console.log(`App render [${componentId}]. Topics:`, Array.from(topics));
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 60000);
@@ -76,8 +79,10 @@ function App() {
         }
 
         if (data.type === 'system' && data.payload?.type === 'state_update') {
-          setTopics(new Set(data.payload.topics));
-          setTopics(new Set(data.payload.topics));
+          setTopics(() => {
+            const next = new Set(data.payload.topics as string[]);
+            return next;
+          });
           setAgents(prev => {
             const newAgents = new Map(prev);
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -87,11 +92,6 @@ function App() {
             });
             return newAgents;
           });
-        } else if (data.type === 'message') {
-          // Main feed only shows town_hall or subscribed topics (excluding system:status)
-          if (data.topic !== 'system:status') {
-            setMessages(prev => [...prev, data]);
-          }
 
           if (data.topic) setTopics(prev => new Set(prev).add(data.topic!));
 
@@ -224,7 +224,11 @@ function App() {
       </div>
       <div className="grid-view">
         {Array.from(topics)
-          .filter(t => t.toLowerCase().includes(topicFilter.toLowerCase()))
+          .filter(t => {
+            const k = typeof t === 'string';
+            const i = k && t.toLowerCase().includes(topicFilter.toLowerCase());
+            return i;
+          })
           .map(topic => (
             <div key={topic} className={`card ${selectedTopic === topic ? 'selected' : ''}`} onClick={() => setSelectedTopic(topic)}>
               <h3>#{topic}</h3>
