@@ -49,8 +49,8 @@ services:
     ports:
       - "5173:5173"
     environment:
-      - VITE_GATEWAY_URL=http://localhost:8081
-      # Note: Frontend runs in browser, so it accesses gateway via localhost (exposed port)
+      # VITE_GATEWAY_URL is removed to allow dynamic detection of host (LAN support)
+      - NODE_ENV=development
     networks:
       - ai-town-net
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import './ProviderSettings.css';
 
 interface Provider {
     name: string;
@@ -6,6 +7,13 @@ interface Provider {
     priority: number;
     apiKey: string;
 }
+
+// Helper to determine gateway URL dynamically
+const getGatewayUrl = () => {
+    if (import.meta.env.VITE_GATEWAY_URL) return import.meta.env.VITE_GATEWAY_URL;
+    // Fallback to current hostname (for LAN access) on port 8081
+    return `${window.location.protocol}//${window.location.hostname}:8081`;
+};
 
 export function ProviderSettings() {
     const [providers, setProviders] = useState<Provider[]>([]);
@@ -18,7 +26,7 @@ export function ProviderSettings() {
 
     const fetchProviders = async () => {
         try {
-            const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8081';
+            const gatewayUrl = getGatewayUrl();
             const res = await fetch(`${gatewayUrl}/admin/providers`);
             const data = await res.json();
             setProviders(data);
@@ -33,7 +41,7 @@ export function ProviderSettings() {
 
         setLoading(true);
         try {
-            const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8081';
+            const gatewayUrl = getGatewayUrl();
             await fetch(`${gatewayUrl}/admin/providers`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -51,7 +59,7 @@ export function ProviderSettings() {
     const handleDelete = async (name: string) => {
         if (!confirm(`Delete provider ${name}?`)) return;
         try {
-            const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8081';
+            const gatewayUrl = getGatewayUrl();
             await fetch(`${gatewayUrl}/admin/providers/${name}`, { method: 'DELETE' });
             fetchProviders();
         } catch (e) {
@@ -63,6 +71,8 @@ export function ProviderSettings() {
         <div className="provider-settings">
             <h2>LLM Providers</h2>
 
+            <GlobalModelConfig />
+
             <div className="provider-list">
                 {providers.map(p => (
                     <div key={p.name} className="provider-card">
@@ -70,7 +80,7 @@ export function ProviderSettings() {
                             <h3>{p.name}</h3>
                             <div className="provider-meta">
                                 <span className="tag">Priority: {p.priority}</span>
-                                <span className="url">{p.baseURL}</span>
+                                <span className="url" title={p.baseURL}>{p.baseURL}</span>
                             </div>
                             <ModelList providerName={p.name} />
                         </div>
@@ -113,6 +123,40 @@ export function ProviderSettings() {
     );
 }
 
+function GlobalModelConfig() {
+    const [currentModel, setCurrentModel] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                const gatewayUrl = getGatewayUrl();
+                const res = await fetch(`${gatewayUrl}/admin/config`);
+                const data = await res.json();
+                setCurrentModel(data.model);
+            } catch (e) {
+                console.error('Failed to fetch config', e);
+            }
+        };
+
+        fetchConfig();
+        // Poll every 5 seconds to keep sync if changed elsewhere
+        const interval = setInterval(fetchConfig, 5000);
+        return () => clearInterval(interval);
+    }, []);
+
+    return (
+        <div className="global-config">
+            <h3>Global Default Model</h3>
+            <p>
+                Currently active model: <strong>{currentModel || 'Not set (using agent defaults)'}</strong>
+            </p>
+            <p>
+                This model will override all specific agent configurations. Select a model below to set it.
+            </p>
+        </div>
+    );
+}
+
 interface Model {
     id: string;
     object?: string;
@@ -136,7 +180,7 @@ function ModelList({ providerName }: { providerName: string }) {
         setLoading(true);
         setError(null);
         try {
-            const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8081';
+            const gatewayUrl = getGatewayUrl();
             const res = await fetch(`${gatewayUrl}/admin/providers/${providerName}/models`);
             if (!res.ok) throw new Error(await res.text());
             const data = await res.json();
@@ -152,48 +196,53 @@ function ModelList({ providerName }: { providerName: string }) {
     };
 
     return (
-        <div className="model-list-section" style={{ marginTop: '10px' }}>
+        <div className="model-list-section">
             <button
                 className="check-models-btn"
                 onClick={checkModels}
                 disabled={loading}
                 type="button"
-                style={{
-                    padding: '4px 8px',
-                    fontSize: '0.8rem',
-                    cursor: 'pointer',
-                    backgroundColor: '#e0e0e0',
-                    border: '1px solid #ccc',
-                    borderRadius: '4px'
-                }}
             >
                 {loading ? 'Checking...' : (visible ? 'Hide Models' : 'Check Models')}
             </button>
 
-            {error && <div className="error-msg" style={{ color: 'red', fontSize: '0.8rem', marginTop: '4px' }}>{error}</div>}
+            {error && <div className="error-msg">{error}</div>}
 
             {visible && models.length > 0 && (
-                <div className="models-dropdown" style={{
-                    marginTop: '8px',
-                    maxHeight: '150px',
-                    overflowY: 'auto',
-                    background: '#f9f9f9',
-                    padding: '8px',
-                    borderRadius: '4px',
-                    border: '1px solid #eee'
-                }}>
-                    <h4 style={{ margin: '0 0 4px 0', fontSize: '0.9rem' }}>Available Models:</h4>
-                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                <div className="models-dropdown">
+                    <h4>Available Models:</h4>
+                    <ul>
                         {models.map((m: Model, i: number) => (
-                            <li key={m.id || i} style={{ fontSize: '0.8rem', padding: '2px 0', borderBottom: '1px solid #eee' }}>
-                                {m.id || JSON.stringify(m)}
+                            <li key={m.id || i}>
+                                <span title={m.id}>{m.id || JSON.stringify(m)}</span>
+                                <button
+                                    onClick={async () => {
+                                        if (!confirm(`Set global model to ${m.id}?`)) return;
+                                        try {
+                                            const gatewayUrl = getGatewayUrl();
+                                            await fetch(`${gatewayUrl}/admin/config`, {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ model: m.id })
+                                            });
+                                            // Trigger reload effectively by waiting for poll or manual
+                                            alert(`Global model set to ${m.id}`);
+                                        } catch (e) {
+                                            alert('Failed to set model');
+                                            console.error(e);
+                                        }
+                                    }}
+                                    className="select-model-btn"
+                                >
+                                    Select
+                                </button>
                             </li>
                         ))}
                     </ul>
                 </div>
             )}
             {visible && models.length === 0 && !error && (
-                <div className="info-msg" style={{ fontSize: '0.8rem', marginTop: '4px', fontStyle: 'italic' }}>No models found directly.</div>
+                <div className="info-msg">No models found directly.</div>
             )}
         </div>
     );

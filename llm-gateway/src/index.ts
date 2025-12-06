@@ -31,10 +31,21 @@ const providers: LLMProviderConfig[] = [
 
 const providerManager = new ProviderManager(providers);
 
+// Global Configuration state
+let globalModel: string | null = process.env.MODEL_NAME || null; // e.g., 'Qwen/Qwen2.5-72B-Instruct'
+
 // OpenAI-compatible Chat Completions Endpoint
 app.post('/v1/chat/completions', async (req, res) => {
     try {
-        const result = await providerManager.executeRequest('/chat/completions', 'POST', req.body);
+        const body = req.body;
+
+        // Model Override Logic
+        if (globalModel) {
+            console.log(`[Gateway] Overriding requested model '${body.model}' with global default '${globalModel}'`);
+            body.model = globalModel;
+        }
+
+        const result = await providerManager.executeRequest('/chat/completions', 'POST', body);
         res.json(result);
     } catch (error: any) {
         res.status(502).json({
@@ -44,6 +55,24 @@ app.post('/v1/chat/completions', async (req, res) => {
             }
         });
     }
+});
+
+// Admin Configuration API
+app.get('/admin/config', (req, res) => {
+    res.json({
+        model: globalModel
+    });
+});
+
+app.post('/admin/config', (req, res) => {
+    const { model } = req.body;
+    if (typeof model !== 'undefined') {
+        globalModel = model;
+        console.log(`[Gateway] Global model set to: ${globalModel}`);
+    }
+    res.json({
+        model: globalModel
+    });
 });
 
 // OpenAI-compatible Models Endpoint
