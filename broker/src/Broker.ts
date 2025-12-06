@@ -47,6 +47,12 @@ export class Broker extends EventEmitter {
 
     public stop(): Promise<void> {
         return new Promise((resolve, reject) => {
+            // Close all client connections first
+            for (const ws of this.clients.keys()) {
+                ws.terminate(); // or close()
+            }
+            this.clients.clear();
+
             if (this.wss) {
                 this.wss.close((err) => {
                     if (err) reject(err);
@@ -248,29 +254,42 @@ export class Broker extends EventEmitter {
      * Allows internal services to publish messages as if they were a system user.
      */
     public internalPublish(topic: string, content: string, senderId: string = 'system') {
-        const message: Message = {
+        const timestamp = Date.now();
+
+        // 1. Prepare message for internal listeners (imitates an incoming publish message)
+        const internalMessage: Message = {
             type: 'publish',
             topic: topic,
             payload: { content, sender: senderId },
             sender: senderId,
-            timestamp: Date.now()
+            timestamp
+        };
+
+        // 2. Prepare message for external subscribers (standard message format)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const clientMessage: any = {
+            type: 'message',
+            topic: topic,
+            payload: { content, sender: senderId },
+            sender: senderId,
+            timestamp
         };
 
         // Reuse the broadcast logic directly.
         // We need to bypass "permission check" because system is god.
 
-        // 1. Send to subscribers
+        // 3. Send to subscribers
         const subscribers = this.subscriptionManager.getSubscribers(topic);
         const wildcardSubscribers = this.subscriptionManager.getWildcardSubscribers();
         const allRecipients = new Set([...subscribers, ...wildcardSubscribers]);
 
         allRecipients.forEach(sub => {
             if (sub.ws.readyState === WebSocket.OPEN) {
-                sub.ws.send(JSON.stringify(message));
+                sub.ws.send(JSON.stringify(clientMessage));
             }
         });
 
-        // 2. EMIT EVENT also for internal listeners
-        this.emit('message', message);
+        // 4. EMIT EVENT also for internal listeners
+        this.emit('message', internalMessage);
     }
 }
