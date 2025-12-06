@@ -35,6 +35,11 @@ function App() {
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
 
+  // Chat state
+  const [chatTarget, setChatTarget] = useState<AgentStatus | null>(null);
+  const [chatHistory, setChatHistory] = useState<Record<string, Message[]>>({});
+  const [chatInput, setChatInput] = useState('');
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 60000);
     return () => clearInterval(timer);
@@ -88,6 +93,15 @@ function App() {
             return newAgents;
           });
         } else if (data.type === 'message') {
+          if (data.topic && data.topic.startsWith('chat:user:')) {
+            const agentId = data.topic.split(':').pop();
+            if (agentId) {
+              setChatHistory(prev => ({
+                ...prev,
+                [agentId]: [...(prev[agentId] || []), data]
+              }));
+            }
+          }
           // Main feed only shows town_hall or subscribed topics (excluding system:status)
           if (data.topic !== 'system:status') {
             setMessages(prev => [...prev, data]);
@@ -148,6 +162,42 @@ function App() {
       feedRef.current.scrollTop = feedRef.current.scrollHeight;
     }
   }, [messages]);
+
+  const handleStartChat = (agent: AgentStatus) => {
+    setChatTarget(agent);
+    const topic = `chat:user:${agent.id}`;
+    if (ws.current?.readyState === WebSocket.OPEN) {
+      ws.current.send(JSON.stringify({ type: 'subscribe', topic }));
+    }
+  };
+
+  const handleSendChat = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput || !chatTarget || !ws.current) return;
+
+    const topic = `agent:${chatTarget.id}:inbox`;
+    const replyTo = `chat:user:${chatTarget.id}`;
+    const message = {
+      type: 'publish',
+      topic,
+      sender: 'user',
+      payload: { content: chatInput, replyTo },
+    };
+    ws.current.send(JSON.stringify(message));
+
+    // Add to local history
+    setChatHistory(prev => ({
+      ...prev,
+      [chatTarget.id]: [...(prev[chatTarget.id] || []), {
+        type: 'message',
+        sender: 'user',
+        payload: { content: chatInput },
+        timestamp: Date.now()
+      }]
+    }));
+
+    setChatInput('');
+  };
 
   const handleAdminBroadcast = (e: React.FormEvent) => {
     e.preventDefault();
@@ -256,6 +306,7 @@ function App() {
               <span className={`status-dot ${Date.now() - (agent.lastSeen || 0) < 60000 ? 'active' : 'away'}`}></span>
               {Date.now() - (agent.lastSeen || 0) < 60000 ? 'Active' : 'Away'}
             </div>
+            <button onClick={() => handleStartChat(agent)} className="chat-button">Chat</button>
           </div>
         ))}
       </div>
@@ -309,8 +360,43 @@ function App() {
     </main>
   );
 
+  const renderChatModal = () => {
+    if (!chatTarget) return null;
+
+    const history = chatHistory[chatTarget.id] || [];
+
+    return (
+      <div className="chat-modal-overlay" onClick={() => setChatTarget(null)}>
+        <div className="chat-modal" onClick={(e) => e.stopPropagation()}>
+          <header className="chat-header">
+            <h3>Chat with {chatTarget.name}</h3>
+            <button onClick={() => setChatTarget(null)} className="close-button">&times;</button>
+          </header>
+          <div className="chat-history">
+            {history.map((msg, i) => (
+              <div key={i} className={`chat-bubble ${msg.sender === 'user' ? 'user' : 'agent'}`}>
+                {msg.payload.content}
+              </div>
+            ))}
+          </div>
+          <form onSubmit={handleSendChat} className="chat-input-form">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              placeholder="Type your message..."
+              autoComplete="off"
+            />
+            <button type="submit">Send</button>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="app-container">
+      {renderChatModal()}
       <div className="global-event-bar" ref={eventBarRef}>
         <div className="timeline-track">
           {allEvents.filter(e => e.topic !== 'system:status').slice(0, 20).map((e, i) => (
