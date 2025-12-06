@@ -1,6 +1,8 @@
 import { Broker } from '../src/Broker';
 import WebSocket from 'ws';
 
+import { setupAnalyst } from '../src/services';
+
 describe('Broker', () => {
     let broker: Broker;
     const PORT = 8081; // Use different port for testing
@@ -11,6 +13,7 @@ describe('Broker', () => {
         jest.spyOn(console, 'warn').mockImplementation(() => { });
         jest.spyOn(console, 'error').mockImplementation(() => { });
         broker = new Broker(PORT);
+        setupAnalyst(broker);
         broker.start();
     });
 
@@ -205,6 +208,72 @@ describe('Broker', () => {
             if (msg.type === 'message' && msg.payload.content === 'Internal Hello') {
                 client.close();
                 done();
+            }
+        });
+    });
+    test('should parse agent directive and forward message', (done) => {
+        const agent = new WebSocket(`ws://localhost:${PORT}`);
+        const receiver = new WebSocket(`ws://localhost:${PORT}`);
+        const TARGET_TOPIC = 'target_topic_' + Math.random().toString(36).substring(7);
+        const INPUT_TOPIC = 'input_topic_' + Math.random().toString(36).substring(7);
+
+        let receiverReady = false;
+        let agentReady = false;
+
+        const maybeSend = () => {
+            if (receiverReady && agentReady && agent.readyState === WebSocket.OPEN) {
+                agent.send(JSON.stringify({
+                    type: 'publish',
+                    topic: INPUT_TOPIC,
+                    // Send to generic topic, analyst picks it up
+                    payload: { content: `>>> TO: ${TARGET_TOPIC} Hello World` }
+                }));
+            }
+        };
+
+        receiver.on('open', () => {
+            receiver.send(JSON.stringify({
+                type: 'create_topic',
+                payload: { name: TARGET_TOPIC, type: 'public' }
+            }));
+        });
+
+        receiver.on('message', (data) => {
+            const msg = JSON.parse(data.toString());
+            // 1. Subscribe when topic created
+            if (msg.type === 'system' && msg.payload.status === 'topic_created') {
+                receiver.send(JSON.stringify({ type: 'subscribe', topic: TARGET_TOPIC }));
+            }
+            // 2. Ready when subscribed
+            if (msg.type === 'system' && msg.payload.status === 'subscribed') {
+                receiverReady = true;
+                maybeSend();
+            }
+            // 3. Verify forwarded message
+            if (msg.type === 'message') {
+                // Expect: "Hello World" (clean content), Sender should be preserved as original sender ID 
+                if (msg.payload.content === 'Hello World' && msg.sender !== 'system') {
+                    agent.close();
+                    receiver.close();
+                    done();
+                }
+            }
+        });
+
+        // Agent setup
+        agent.on('open', () => {
+            // Create input topic so we have permission
+            agent.send(JSON.stringify({
+                type: 'create_topic',
+                payload: { name: INPUT_TOPIC, type: 'public' }
+            }));
+        });
+
+        agent.on('message', (data) => {
+            const msg = JSON.parse(data.toString());
+            if (msg.type === 'system' && msg.payload.status === 'topic_created') {
+                agentReady = true;
+                maybeSend();
             }
         });
     });

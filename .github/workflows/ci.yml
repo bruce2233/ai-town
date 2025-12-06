@@ -56,6 +56,12 @@ jobs:
         run: |
           npm ci
           npm test
+          
+      - name: Test Frontend
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm test
 
   build:
     runs-on: ubuntu-latest
