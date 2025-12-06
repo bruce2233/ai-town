@@ -32,20 +32,33 @@ export function setupAnalyst(broker: Broker) {
 
         // Logic: Look for ">>> TO: <topic_name>"
         // Regex: >>> TO: (anything not newline)
-        const topicMatch = content.match(/>>> TO: ([a-zA-Z0-9_:.-]+)/i);
+        const topicMatch = content.match(/>>> TO: (\S+)/i); // Expect topic to be a single word (no spaces)
 
-        if (topicMatch && topicMatch[1]) {
+        if (topicMatch) {
             const targetTopic = topicMatch[1].trim();
             const directive = topicMatch[0];
+
+            // Basic validation: Topic should not be empty and shouldn't contain invalid chars if we had rules
+            // Ideally we check if topic exists, but that's harder without state. 
 
             // Remove the directive from content to clean it up
             const cleanContent = content.replace(directive, '').trim();
 
+            if (!cleanContent) {
+                // Empty content, maybe an accidental send? 
+                broker.internalPublish(`agent:${msg.sender}:inbox`, `[System Error]: You tried to send to ${targetTopic} but the message content was empty.`, 'system');
+                return;
+            }
+
             console.log(`[ANALYST] Detected forwarding request from ${msg.sender} to ${targetTopic}`);
 
             // Use internalPublish to send as a system-level agent
-            // We preserve the original sender in the forwarded message text for clarity
             broker.internalPublish(targetTopic, cleanContent, msg.sender);
+        } else {
+            // Check for "near miss" - e.g. someone typing just ">>> TO:" without a topic
+            if (content.match(/>>> TO:/i)) {
+                broker.internalPublish(`agent:${msg.sender}:inbox`, `[System Error]: Invalid syntax. Use ">>> TO: <topic_name> <message>"`, 'system');
+            }
         }
     });
 }
