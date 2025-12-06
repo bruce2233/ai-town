@@ -74,10 +74,7 @@ export class ProviderManager {
                 });
 
                 console.log(`[Gateway] Success with provider: ${provider.name}`);
-                this.currentProviderIndex = i; // Remember successful provider? Or always reset?
-                // For failover, we usually want to stick to the highest priority that works,
-                // so we don't update currentProviderIndex permanently unless we want "sticky" sessions.
-                // But here we just return.
+                this.currentProviderIndex = i;
                 return response.data;
             } catch (error: any) {
                 console.error(`[Gateway] Failed with provider ${provider.name}:`, error.message);
@@ -88,5 +85,28 @@ export class ProviderManager {
 
         // If all failed
         throw new Error(`All providers failed. Errors: ${JSON.stringify(errors)}`);
+    }
+
+    async fetchModels(providerName: string): Promise<any> {
+        const provider = this.providers.find(p => p.name === providerName);
+        if (!provider) {
+            throw new Error(`Provider with name ${providerName} not found.`);
+        }
+
+        try {
+            console.log(`[Gateway] Fetching models from provider: ${provider.name}`);
+            const response = await axios({
+                method: 'GET',
+                url: `${provider.baseURL}/models`,
+                headers: {
+                    'Authorization': `Bearer ${provider.apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                timeout: provider.timeout || 10000
+            });
+            return response.data;
+        } catch (error: any) {
+            throw new Error(`Failed to fetch models from ${providerName}: ${error.message}`);
+        }
     }
 }
