@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { TopicManager, TopicType } from './TopicManager';
 import { SubscriptionManager, Subscriber } from './SubscriptionManager';
+import { EventEmitter } from 'events';
 
 const LOG_FILE = path.join(__dirname, '../../events.jsonl');
 
@@ -20,16 +21,18 @@ export interface Message {
     timestamp?: number;
 }
 
-export class Broker {
+export class Broker extends EventEmitter {
     private wss: WebSocketServer | null = null;
     private port: number;
     private topicManager: TopicManager;
     private subscriptionManager: SubscriptionManager;
+    // removed internal services
 
     // Map ws to subscriber identity
     private clients = new Map<WebSocket, Subscriber>();
 
     constructor(port: number = 8080) {
+        super(); // Init EventEmitter
         this.port = port;
         this.topicManager = new TopicManager();
         this.subscriptionManager = new SubscriptionManager();
@@ -103,6 +106,11 @@ export class Broker {
         // Use current sender ID
         message.sender = sender.id;
 
+        // EMIT EVENT for internal listeners (Timeline, Analyst, etc)
+        if (message.type === 'publish') {
+            this.emit('message', message);
+        }
+
         switch (message.type) {
             case 'identify':
                 if (message.payload && message.payload.id) {
@@ -154,7 +162,8 @@ export class Broker {
 
             case 'subscribe':
                 if (message.topic) {
-                    if (this.topicManager.canSubscribe(message.topic, sender.id)) {
+                    // Allow wildcard subscription without topicManager check (it's a system feature)
+                    if (message.topic === '*' || this.topicManager.canSubscribe(message.topic, sender.id)) {
                         this.subscriptionManager.subscribe(message.topic, sender);
                         console.log(`Client ${sender.id} subscribed to ${message.topic}`);
                         sender.ws.send(JSON.stringify({
@@ -205,7 +214,12 @@ export class Broker {
                 if (message.topic && message.payload) {
                     if (this.topicManager.canPublish(message.topic, sender.id)) {
                         const subscribers = this.subscriptionManager.getSubscribers(message.topic);
-                        subscribers.forEach(sub => {
+                        const wildcardSubscribers = this.subscriptionManager.getWildcardSubscribers();
+
+                        // Merge and dedup
+                        const allRecipients = new Set([...subscribers, ...wildcardSubscribers]);
+
+                        allRecipients.forEach(sub => {
                             if (sub.ws.readyState === WebSocket.OPEN) {
                                 sub.ws.send(JSON.stringify({
                                     type: 'message',
@@ -229,5 +243,34 @@ export class Broker {
             default:
                 console.warn('Unknown message type:', message.type);
         }
+    }
+    /**
+     * Allows internal services to publish messages as if they were a system user.
+     */
+    public internalPublish(topic: string, content: string, senderId: string = 'system') {
+        const message: Message = {
+            type: 'publish',
+            topic: topic,
+            payload: { content, sender: senderId },
+            sender: senderId,
+            timestamp: Date.now()
+        };
+
+        // Reuse the broadcast logic directly.
+        // We need to bypass "permission check" because system is god.
+
+        // 1. Send to subscribers
+        const subscribers = this.subscriptionManager.getSubscribers(topic);
+        const wildcardSubscribers = this.subscriptionManager.getWildcardSubscribers();
+        const allRecipients = new Set([...subscribers, ...wildcardSubscribers]);
+
+        allRecipients.forEach(sub => {
+            if (sub.ws.readyState === WebSocket.OPEN) {
+                sub.ws.send(JSON.stringify(message));
+            }
+        });
+
+        // 2. EMIT EVENT also for internal listeners
+        this.emit('message', message);
     }
 }

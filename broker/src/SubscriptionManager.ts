@@ -8,16 +8,19 @@ export interface Subscriber {
 
 export class SubscriptionManager {
     // Topic Name -> Set of Subscriber IDs
+    private wildcardSubscribers = new Set<Subscriber>();
     private subscriptions = new Map<string, Set<Subscriber>>();
-
-    // Subscriber ID -> Set of Topic Names (for reverse lookup/cleanup)
     private clientSubscriptions = new Map<string, Set<string>>();
 
     subscribe(topic: string, subscriber: Subscriber) {
-        if (!this.subscriptions.has(topic)) {
-            this.subscriptions.set(topic, new Set());
+        if (topic === '*') {
+            this.wildcardSubscribers.add(subscriber);
+        } else {
+            if (!this.subscriptions.has(topic)) {
+                this.subscriptions.set(topic, new Set());
+            }
+            this.subscriptions.get(topic)!.add(subscriber);
         }
-        this.subscriptions.get(topic)!.add(subscriber);
 
         if (!this.clientSubscriptions.has(subscriber.id)) {
             this.clientSubscriptions.set(subscriber.id, new Set());
@@ -26,19 +29,25 @@ export class SubscriptionManager {
     }
 
     unsubscribe(topic: string, subscriberId: string) {
-        // This is inefficient if we only have ID. 
-        // Realistically we need the Subscriber object reference or we search.
-        // For now let's iterate.
-        const subs = this.subscriptions.get(topic);
-        if (subs) {
-            for (const sub of subs) {
+        if (topic === '*') {
+            for (const sub of this.wildcardSubscribers) {
                 if (sub.id === subscriberId) {
-                    subs.delete(sub);
+                    this.wildcardSubscribers.delete(sub);
                     break;
                 }
             }
-            if (subs.size === 0) {
-                this.subscriptions.delete(topic);
+        } else {
+            const subs = this.subscriptions.get(topic);
+            if (subs) {
+                for (const sub of subs) {
+                    if (sub.id === subscriberId) {
+                        subs.delete(sub);
+                        break;
+                    }
+                }
+                if (subs.size === 0) {
+                    this.subscriptions.delete(topic);
+                }
             }
         }
 
@@ -69,6 +78,10 @@ export class SubscriptionManager {
     getSubscribers(topic: string): Subscriber[] {
         const subs = this.subscriptions.get(topic);
         return subs ? Array.from(subs) : [];
+    }
+
+    getWildcardSubscribers(): Subscriber[] {
+        return Array.from(this.wildcardSubscribers);
     }
 
     getTopicsForSubscriber(subscriberId: string): string[] {
