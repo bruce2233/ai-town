@@ -7,6 +7,13 @@ interface Provider {
     apiKey: string;
 }
 
+// Helper to determine gateway URL dynamically
+const getGatewayUrl = () => {
+    if (import.meta.env.VITE_GATEWAY_URL) return import.meta.env.VITE_GATEWAY_URL;
+    // Fallback to current hostname (for LAN access) on port 8081
+    return `${window.location.protocol}//${window.location.hostname}:8081`;
+};
+
 export function ProviderSettings() {
     const [providers, setProviders] = useState<Provider[]>([]);
     const [newProvider, setNewProvider] = useState<Partial<Provider>>({ priority: 10 });
@@ -18,7 +25,7 @@ export function ProviderSettings() {
 
     const fetchProviders = async () => {
         try {
-            const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8081';
+            const gatewayUrl = getGatewayUrl();
             const res = await fetch(`${gatewayUrl}/admin/providers`);
             const data = await res.json();
             setProviders(data);
@@ -33,7 +40,7 @@ export function ProviderSettings() {
 
         setLoading(true);
         try {
-            const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8081';
+            const gatewayUrl = getGatewayUrl();
             await fetch(`${gatewayUrl}/admin/providers`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -51,7 +58,7 @@ export function ProviderSettings() {
     const handleDelete = async (name: string) => {
         if (!confirm(`Delete provider ${name}?`)) return;
         try {
-            const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8081';
+            const gatewayUrl = getGatewayUrl();
             await fetch(`${gatewayUrl}/admin/providers/${name}`, { method: 'DELETE' });
             fetchProviders();
         } catch (e) {
@@ -121,7 +128,7 @@ function GlobalModelConfig() {
     useEffect(() => {
         const fetchConfig = async () => {
             try {
-                const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8081';
+                const gatewayUrl = getGatewayUrl();
                 const res = await fetch(`${gatewayUrl}/admin/config`);
                 const data = await res.json();
                 setCurrentModel(data.model);
@@ -178,7 +185,7 @@ function ModelList({ providerName }: { providerName: string }) {
         setLoading(true);
         setError(null);
         try {
-            const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8081';
+            const gatewayUrl = getGatewayUrl();
             const res = await fetch(`${gatewayUrl}/admin/providers/${providerName}/models`);
             if (!res.ok) throw new Error(await res.text());
             const data = await res.json();
@@ -240,7 +247,7 @@ function ModelList({ providerName }: { providerName: string }) {
                                     onClick={async () => {
                                         if (!confirm(`Set global model to ${m.id}?`)) return;
                                         try {
-                                            const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8081';
+                                            const gatewayUrl = getGatewayUrl();
                                             await fetch(`${gatewayUrl}/admin/config`, {
                                                 method: 'POST',
                                                 headers: { 'Content-Type': 'application/json' },
