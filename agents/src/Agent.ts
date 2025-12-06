@@ -272,7 +272,7 @@ export class Agent extends EventEmitter {
           } else if (msg.topic === 'town_hall') {
             this.publish('agent:admin:inbox', `[Reply to Announcement]: ${message.content}`);
           } else if (msg.sender) {
-            const targetTopic = `agent:${msg.sender}:inbox`;
+            const targetTopic = msg.payload?.replyTo || `agent:${msg.sender}:inbox`;
             this.publish(targetTopic, message.content);
           }
 

@@ -33,3 +33,4 @@ events.jsonl
 *.njsproj
 *.sln
 *.sw?
+*.log
