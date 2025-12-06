@@ -113,8 +113,16 @@ export function ProviderSettings() {
     );
 }
 
+interface Model {
+    id: string;
+    object?: string;
+    created?: number;
+    owned_by?: string;
+    [key: string]: unknown;
+}
+
 function ModelList({ providerName }: { providerName: string }) {
-    const [models, setModels] = useState<any[]>([]);
+    const [models, setModels] = useState<Model[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [visible, setVisible] = useState(false);
@@ -136,8 +144,8 @@ function ModelList({ providerName }: { providerName: string }) {
             const list = Array.isArray(data) ? data : (data.data || []);
             setModels(list);
             setVisible(true);
-        } catch (e: any) {
-            setError(e.message);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
         } finally {
             setLoading(false);
         }
@@ -176,9 +184,9 @@ function ModelList({ providerName }: { providerName: string }) {
                 }}>
                     <h4 style={{ margin: '0 0 4px 0', fontSize: '0.9rem' }}>Available Models:</h4>
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                        {models.map((m: any, i: number) => (
+                        {models.map((m: Model, i: number) => (
                             <li key={m.id || i} style={{ fontSize: '0.8rem', padding: '2px 0', borderBottom: '1px solid #eee' }}>
-                                {m.id || m.name || JSON.stringify(m)}
+                                {m.id || JSON.stringify(m)}
                             </li>
                         ))}
                     </ul>
