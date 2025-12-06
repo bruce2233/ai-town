@@ -8,6 +8,7 @@ jest.unstable_mockModule('ws', () => {
             send: jest.fn(),
             readyState: 1, // WebSocket.OPEN
             close: jest.fn(),
+            removeListener: jest.fn(),
         })),
         WebSocket: jest.fn(),
     };
