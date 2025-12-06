@@ -45,7 +45,11 @@ function App() {
   const eventBarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const socket = new WebSocket('ws://localhost:8080');
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.hostname;
+    // Use env var if available, otherwise default to same host on port 8080
+    const wsUrl = import.meta.env.VITE_BROKER_URL || `${protocol}//${host}:8080`;
+    const socket = new WebSocket(wsUrl);
     ws.current = socket;
 
     socket.onopen = () => {
