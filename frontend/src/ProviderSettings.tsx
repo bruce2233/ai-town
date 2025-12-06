@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import './ProviderSettings.css';
 
 interface Provider {
     name: string;
@@ -79,7 +80,7 @@ export function ProviderSettings() {
                             <h3>{p.name}</h3>
                             <div className="provider-meta">
                                 <span className="tag">Priority: {p.priority}</span>
-                                <span className="url">{p.baseURL}</span>
+                                <span className="url" title={p.baseURL}>{p.baseURL}</span>
                             </div>
                             <ModelList providerName={p.name} />
                         </div>
@@ -144,18 +145,12 @@ function GlobalModelConfig() {
     }, []);
 
     return (
-        <div className="global-config" style={{
-            background: '#f0f7ff',
-            padding: '12px',
-            borderRadius: '6px',
-            marginBottom: '20px',
-            border: '1px solid #cce3ff'
-        }}>
-            <h3 style={{ marginTop: 0, fontSize: '1rem' }}>Global Default Model</h3>
-            <p style={{ margin: '4px 0', fontSize: '0.9rem' }}>
+        <div className="global-config">
+            <h3>Global Default Model</h3>
+            <p>
                 Currently active model: <strong>{currentModel || 'Not set (using agent defaults)'}</strong>
             </p>
-            <p style={{ margin: 0, fontSize: '0.8rem', color: '#666' }}>
+            <p>
                 This model will override all specific agent configurations. Select a model below to set it.
             </p>
         </div>
@@ -201,47 +196,24 @@ function ModelList({ providerName }: { providerName: string }) {
     };
 
     return (
-        <div className="model-list-section" style={{ marginTop: '10px' }}>
+        <div className="model-list-section">
             <button
                 className="check-models-btn"
                 onClick={checkModels}
                 disabled={loading}
                 type="button"
-                style={{
-                    padding: '4px 8px',
-                    fontSize: '0.8rem',
-                    cursor: 'pointer',
-                    backgroundColor: '#e0e0e0',
-                    border: '1px solid #ccc',
-                    borderRadius: '4px'
-                }}
             >
                 {loading ? 'Checking...' : (visible ? 'Hide Models' : 'Check Models')}
             </button>
 
-            {error && <div className="error-msg" style={{ color: 'red', fontSize: '0.8rem', marginTop: '4px' }}>{error}</div>}
+            {error && <div className="error-msg">{error}</div>}
 
             {visible && models.length > 0 && (
-                <div className="models-dropdown" style={{
-                    marginTop: '8px',
-                    maxHeight: '150px',
-                    overflowY: 'auto',
-                    background: '#f9f9f9',
-                    padding: '8px',
-                    borderRadius: '4px',
-                    border: '1px solid #eee'
-                }}>
-                    <h4 style={{ margin: '0 0 4px 0', fontSize: '0.9rem' }}>Available Models:</h4>
-                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                <div className="models-dropdown">
+                    <h4>Available Models:</h4>
+                    <ul>
                         {models.map((m: Model, i: number) => (
-                            <li key={m.id || i} style={{
-                                fontSize: '0.8rem',
-                                padding: '4px 0',
-                                borderBottom: '1px solid #eee',
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center'
-                            }}>
+                            <li key={m.id || i}>
                                 <span title={m.id}>{m.id || JSON.stringify(m)}</span>
                                 <button
                                     onClick={async () => {
@@ -260,16 +232,7 @@ function ModelList({ providerName }: { providerName: string }) {
                                             console.error(e);
                                         }
                                     }}
-                                    style={{
-                                        marginLeft: '8px',
-                                        padding: '2px 6px',
-                                        cursor: 'pointer',
-                                        fontSize: '0.7rem',
-                                        background: '#2196F3',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: '3px'
-                                    }}
+                                    className="select-model-btn"
                                 >
                                     Select
                                 </button>
@@ -279,7 +242,7 @@ function ModelList({ providerName }: { providerName: string }) {
                 </div>
             )}
             {visible && models.length === 0 && !error && (
-                <div className="info-msg" style={{ fontSize: '0.8rem', marginTop: '4px', fontStyle: 'italic' }}>No models found directly.</div>
+                <div className="info-msg">No models found directly.</div>
             )}
         </div>
     );
