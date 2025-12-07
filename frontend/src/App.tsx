@@ -77,8 +77,8 @@ function App() {
 
         if (data.type === 'system' && data.payload?.type === 'state_update') {
           setTopics(() => {
-            const next = new Set(data.payload.topics as string[]);
-            return next;
+            const safeTopics = (data.payload.topics as any[]).filter(t => typeof t === 'string');
+            return new Set(safeTopics);
           });
           setAgents(prev => {
             const newAgents = new Map(prev);
@@ -90,7 +90,9 @@ function App() {
             return newAgents;
           });
 
-          if (data.topic) setTopics(prev => new Set(prev).add(data.topic!));
+          if (data.topic && typeof data.topic === 'string') {
+            setTopics(prev => new Set(prev).add(data.topic!));
+          }
 
           // Handle Agent Status Heartbeat
           if (data.topic === 'system:status' && data.sender) {
