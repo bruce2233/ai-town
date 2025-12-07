@@ -97,6 +97,7 @@ export class Agent extends EventEmitter {
 
       const onOpen = () => {
         // console.log(`${this.name} connected to broker`);
+        this.ws?.send(JSON.stringify({ type: 'identify', payload: { id: this.name } }));
         this.subscribe('town_hall'); // Listen to announcements
         this.subscribe(`agent:${this.name}:inbox`); // Listen to private messages
 

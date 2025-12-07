@@ -1,6 +1,6 @@
 import { Broker, Message } from './Broker';
 
-const PORT = 8080;
+const PORT = parseInt(process.env.PORT || '8080');
 const broker = new Broker(PORT);
 
 // --- Timeline Service ---
