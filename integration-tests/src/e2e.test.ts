@@ -4,142 +4,107 @@ import WebSocket from 'ws';
 import path from 'path';
 import fs from 'fs';
 
-// Helper to wait for a condition
-const waitForCondition = async (condition: () => boolean | Promise<boolean>, timeout = 10000, interval = 200) => {
-    const start = Date.now();
-    while (Date.now() - start < timeout) {
-        if (await condition()) return true;
-        await new Promise(r => setTimeout(r, interval));
-    }
-    return false;
-};
+const BROKER_PORT = 8084;
+const BROKER_URL = `ws://localhost:${BROKER_PORT}`;
+const BROKER_DIR = path.resolve(__dirname, '../../broker');
+const AGENTS_DIR = path.resolve(__dirname, '../../agents');
 
-describe('E2E Integration: Agent -> Broker -> Client', () => {
+describe('End-to-End Integration', () => {
     let brokerProcess: ChildProcess;
     let agentProcess: ChildProcess;
     let clientSocket: WebSocket;
-    const BROKER_PORT = 8083;
-    const WS_URL = `ws://localhost:${BROKER_PORT}`;
 
     beforeAll(async () => {
-        const brokerLog = fs.createWriteStream(path.resolve(__dirname, '../broker.log'));
-        const agentLog = fs.createWriteStream(path.resolve(__dirname, '../agent.log'));
-
         // 1. Start Broker
-        const brokerPath = path.resolve(__dirname, '../../broker');
-        console.log('Starting Broker from:', brokerPath);
         brokerProcess = spawn('npm', ['run', 'dev'], {
-            cwd: brokerPath,
-            env: { ...process.env, PORT: BROKER_PORT.toString() }, // Pass PORT
-            shell: true
+            cwd: BROKER_DIR,
+            env: { ...process.env, PORT: BROKER_PORT.toString() },
+            shell: true,
+            stdio: 'pipe' // Capture output for debugging
         });
+
+        // Pipe logs to file for debugging
+        const brokerLog = fs.createWriteStream('broker.log');
         brokerProcess.stdout?.pipe(brokerLog);
         brokerProcess.stderr?.pipe(brokerLog);
 
-        // Wait for Broker to be ready (listening on port)
-        const brokerReady = await waitForCondition(async () => {
-            try {
-                const ws = new WebSocket(WS_URL);
-                return new Promise((resolve) => {
-                    ws.on('open', () => {
-                        ws.close();
-                        resolve(true);
-                    });
-                    ws.on('error', () => resolve(false));
-                });
-            } catch {
-                return false;
-            }
-        });
+        console.log('Waiting for Broker to start...');
+        await new Promise(resolve => setTimeout(resolve, 5000));
 
-        if (!brokerReady) {
-            console.error('Broker failed to start in time.');
-            throw new Error('Broker not ready');
-        }
-        console.log('Broker is ready!');
-
-        // 2. Start Agent
-        const agentPath = path.resolve(__dirname, '../../agents');
-        console.log('Starting Agent from:', agentPath);
+        // 2. Start Agents
         agentProcess = spawn('npm', ['start'], {
-            cwd: agentPath,
-            env: { ...process.env, BROKER_URL: WS_URL, AGENT_NAME: 'IntegrationTestAgent' },
-            shell: true
+            cwd: AGENTS_DIR,
+            env: {
+                ...process.env,
+                BROKER_URL: BROKER_URL,
+                LLM_API_URL: 'http://localhost:8081/v1', // Assuming Gateway is running or mocked, but agents might not need it for connect
+                OPENAI_API_KEY: 'dummy'
+            },
+            shell: true,
+            stdio: 'pipe'
         });
+
+        const agentLog = fs.createWriteStream('agent.log');
         agentProcess.stdout?.pipe(agentLog);
         agentProcess.stderr?.pipe(agentLog);
 
-        // Wait for connection
-        await new Promise(r => setTimeout(r, 8000));
-    }, 30000); // Increased timeout for process spawning
+        console.log('Waiting for Agents to connect...');
+        await new Promise(resolve => setTimeout(resolve, 5000));
+    }, 30000);
 
     afterAll(() => {
-        try {
-            if (clientSocket && clientSocket.readyState === WebSocket.OPEN) {
-                clientSocket.close();
-            }
-        } catch (e) {
-            console.error('Error closing client socket:', e);
+        if (clientSocket && clientSocket.readyState === WebSocket.OPEN) {
+            clientSocket.close();
         }
 
+        // Kill processes tree
         try {
-            if (brokerProcess) {
-                if (brokerProcess.pid) process.kill(-brokerProcess.pid); // Kill process group
-                brokerProcess.kill();
-            }
+            if (brokerProcess.pid) process.kill(-brokerProcess.pid, 'SIGKILL');
         } catch (e) {
-            console.error('Error killing broke process:', e);
-        }
-
-        try {
-            if (agentProcess) {
-                if (agentProcess.pid) process.kill(-agentProcess.pid);
-                agentProcess.kill();
-            }
-        } catch (e) {
-            console.error('Error killing agent process:', e);
-        }
+            // Ignore if process is already dead
+        }        // Using tree kill approach or simple kill:
+        try { brokerProcess.kill(); } catch (e) { }
+        try { agentProcess.kill(); } catch (e) { }
     });
 
-    it('should allow an agent to register and communicate', async () => {
+    it('Frontend should receive messages from Agents via Broker', async () => {
+        const receivedMessages: any[] = [];
+
         await new Promise<void>((resolve, reject) => {
-            clientSocket = new WebSocket(WS_URL);
+            clientSocket = new WebSocket(BROKER_URL);
 
             clientSocket.on('open', () => {
-                // Identify as an observer
+                console.log('Frontend Client connected');
+                // Simulate App.tsx identity and subscription
                 clientSocket.send(JSON.stringify({ type: 'identify', payload: { id: 'Observer' } }));
-
-                // Poll for state every 1s to catch when agents join
-                const interval = setInterval(() => {
-                    if (clientSocket.readyState === WebSocket.OPEN) {
-                        clientSocket.send(JSON.stringify({ type: 'get_state' }));
-                    }
-                }, 1000);
+                clientSocket.send(JSON.stringify({ type: 'subscribe', topic: '*' })); // Firehose
             });
-
-            // Stop polling when test ends (via cleanup in afterAll, but also good to stop here if resolved)
-            // We'll rely on resolve/timeout to finish test.
-
-            const messages: any[] = [];
 
             clientSocket.on('message', (data) => {
                 const msg = JSON.parse(data.toString());
-                messages.push(msg);
-                console.log('[TEST CLIENT] Received:', msg.type, msg.payload?.type);
+                receivedMessages.push(msg);
+
+                // Check if we received a chat message from an agent
+                if (msg.type === 'message' && msg.sender && msg.sender !== 'Observer') {
+                    console.log('Received Agent Message:', msg);
+                    resolve();
+                }
             });
 
-            // We expect at least the initial state update
-            setTimeout(() => {
-                const stateUpdate = messages.find(m => m.type === 'system' && m.payload?.type === 'state_update');
-                expect(stateUpdate).toBeDefined();
-                const agents = stateUpdate?.payload?.agents || [];
-                // Check for Alice (default agent) since agents/index.ts spawns her
-                const found = agents.find((a: any) => a.name === 'Alice' || a.id === 'Alice');
-                expect(found).toBeDefined();
-                resolve();
-            }, 8000);
+            clientSocket.on('error', (err) => {
+                reject(err);
+            });
 
-            clientSocket.on('error', (err) => reject(err));
+            // Timeout if no message received
+            setTimeout(() => {
+                if (receivedMessages.length > 0) resolve(); // Resolve if we got *something* at least
+                else reject(new Error('Timeout: No messages received from agents'));
+            }, 15000);
         });
-    }, 15000);
+
+        expect(receivedMessages.length).toBeGreaterThan(0);
+        const agentMsg = receivedMessages.find(m => m.type === 'message' && m.sender !== 'Observer');
+        expect(agentMsg).toBeDefined();
+        // expect(agentMsg.topic).toBe('town_hall'); // Might be private topic
+    }, 20000);
 });

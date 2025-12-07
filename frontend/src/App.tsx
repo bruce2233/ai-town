@@ -25,7 +25,7 @@ import { ProviderSettings } from './ProviderSettings';
 type View = 'dashboard' | 'topics' | 'agents' | 'settings';
 
 function App() {
-  const [messages,] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [allEvents, setAllEvents] = useState<Message[]>([]); // Firehose
   const [connected, setConnected] = useState(false);
   const [agents, setAgents] = useState<Map<string, AgentStatus>>(new Map());
@@ -69,10 +69,19 @@ function App() {
         if (data.type === 'message' || data.type === 'system') {
           if (data.payload?.type === 'history_replay') {
             console.log('Received history:', data.payload.events.length);
-            setAllEvents(prev => [...data.payload.events, ...prev].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 500));
+            const history = data.payload.events;
+            setAllEvents(prev => [...history, ...prev].sort((a: Message, b: Message) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 500));
+            // Also restore chat messages from history
+            const chatHistory = history.filter((m: Message) => m.type === 'message');
+            setMessages(prev => [...chatHistory, ...prev].sort((a: Message, b: Message) => (a.timestamp || 0) - (b.timestamp || 0)));
           } else {
             setAllEvents(prev => [data, ...prev].slice(0, 500)); // Keep last 500
           }
+        }
+
+        // Live Chat Messages
+        if (data.type === 'message' && data.sender) {
+          setMessages(prev => [...prev, data]);
         }
 
         if (data.type === 'system' && data.payload?.type === 'state_update') {
@@ -92,39 +101,39 @@ function App() {
             });
             return newAgents;
           });
+        } // Close state_update block
 
-          if (data.topic && typeof data.topic === 'string') {
-            setTopics(prev => new Set(prev).add(data.topic!));
-          }
+        if (data.topic && typeof data.topic === 'string') {
+          setTopics(prev => new Set(prev).add(data.topic!));
+        }
 
-          // Handle Agent Status Heartbeat
-          if (data.topic === 'system:status' && data.sender) {
-            const status = typeof data.payload === 'string' ? JSON.parse(data.payload) : data.payload;
-            setAgents(prev => {
-              const newMap = new Map(prev);
-              const existing = newMap.get(data.sender!) || { id: data.sender!, subscriptions: [] };
-              newMap.set(data.sender!, {
-                ...existing,
-                ...status,
-                lastSeen: Date.now()
-              });
-              return newMap;
+        // Handle Agent Status Heartbeat
+        if (data.topic === 'system:status' && data.sender) {
+          const status = typeof data.payload === 'string' ? JSON.parse(data.payload) : data.payload;
+          setAgents(prev => {
+            const newMap = new Map(prev);
+            const existing = newMap.get(data.sender!) || { id: data.sender!, subscriptions: [] };
+            newMap.set(data.sender!, {
+              ...existing,
+              ...status,
+              lastSeen: Date.now()
             });
-          } else if (data.sender) {
-            // Regular message update
-            setAgents(prev => {
-              const newMap = new Map(prev);
-              const key = data.sender!;
-              newMap.set(key, {
-                id: key,
-                name: key,
-                subscriptions: newMap.get(key)?.subscriptions || [],
-                lastSeen: Date.now(),
-                ...newMap.get(key)
-              });
-              return newMap;
+            return newMap;
+          });
+        } else if (data.sender) {
+          // Regular message update
+          setAgents(prev => {
+            const newMap = new Map(prev);
+            const key = data.sender!;
+            newMap.set(key, {
+              id: key,
+              name: key,
+              subscriptions: newMap.get(key)?.subscriptions || [],
+              lastSeen: Date.now(),
+              ...newMap.get(key)
             });
-          }
+            return newMap;
+          });
         }
       } catch (e) {
         console.error('Error parsing message', e);
