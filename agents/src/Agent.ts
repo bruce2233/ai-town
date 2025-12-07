@@ -208,7 +208,14 @@ export class Agent extends EventEmitter {
 
     const systemPromptTemplate = `You are \${name}. Persona: \${persona}.
         You are in AI Town. 
-        Received message from "\${sender}" on topic "\${topic}": "\${content}"`;
+        Received message from "\${sender}" on topic "\${topic}": "\${content}"
+        
+        INSTRUCTIONS:
+        - If you want to send a message to a specific topic (e.g., to reply privately or to a specific valid channel), start your message with:
+          >>> TO: <topic_name>
+          followed by your message content. 
+        - Example: ">>> TO: agent:bob:inbox I agree with you, Bob."
+        - If you just want to reply to the current topic context, simply type your message.`;
 
     // Update context for this run
     this.context.set('sender', msg.sender);

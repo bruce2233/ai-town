@@ -25,7 +25,7 @@ import { ProviderSettings } from './ProviderSettings';
 type View = 'dashboard' | 'topics' | 'agents' | 'settings';
 
 function App() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages,] = useState<Message[]>([]);
   const [allEvents, setAllEvents] = useState<Message[]>([]); // Firehose
   const [connected, setConnected] = useState(false);
   const [agents, setAgents] = useState<Map<string, AgentStatus>>(new Map());
@@ -76,8 +76,10 @@ function App() {
         }
 
         if (data.type === 'system' && data.payload?.type === 'state_update') {
-          setTopics(new Set(data.payload.topics));
-          setTopics(new Set(data.payload.topics));
+          setTopics(() => {
+            const next = new Set(data.payload.topics as string[]);
+            return next;
+          });
           setAgents(prev => {
             const newAgents = new Map(prev);
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -87,11 +89,6 @@ function App() {
             });
             return newAgents;
           });
-        } else if (data.type === 'message') {
-          // Main feed only shows town_hall or subscribed topics (excluding system:status)
-          if (data.topic !== 'system:status') {
-            setMessages(prev => [...prev, data]);
-          }
 
           if (data.topic) setTopics(prev => new Set(prev).add(data.topic!));
 
@@ -224,7 +221,11 @@ function App() {
       </div>
       <div className="grid-view">
         {Array.from(topics)
-          .filter(t => t.toLowerCase().includes(topicFilter.toLowerCase()))
+          .filter(t => {
+            const k = typeof t === 'string';
+            const i = k && t.toLowerCase().includes(topicFilter.toLowerCase());
+            return i;
+          })
           .map(topic => (
             <div key={topic} className={`card ${selectedTopic === topic ? 'selected' : ''}`} onClick={() => setSelectedTopic(topic)}>
               <h3>#{topic}</h3>
