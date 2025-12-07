@@ -1,4 +1,4 @@
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import App from './App';
 import React from 'react';
@@ -71,6 +71,13 @@ describe('App Component', () => {
                 mockSocket.onmessage!({ data: JSON.stringify(badData) } as MessageEvent);
             });
         }
+
+        // Trigger view change to "Topics"
+        // Use getByRole which is more precise than getAllByText
+        const topicsBtn = screen.getByRole('button', { name: 'Topics' });
+        await React.act(async () => {
+            fireEvent.click(topicsBtn);
+        });
 
         // Verify valid topics
         // Assert valid topics are present
