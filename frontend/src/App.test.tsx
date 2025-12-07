@@ -95,4 +95,49 @@ describe('App Component', () => {
         expect(screen.queryByText('#123')).not.toBeInTheDocument();
 
     });
+
+    it('renders incoming chat messages', async () => {
+        render(<App />);
+
+        // Clear mock sockets before test
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (globalThis as any).mockSockets = [];
+        cleanup();
+        render(<App />);
+
+        await waitFor(() => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            expect((globalThis as any).mockSockets.length).toBeGreaterThan(0);
+        });
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mockSocket = (globalThis as any).mockSockets[0] as MockWebSocket;
+
+        await waitFor(() => {
+            expect(mockSocket.onmessage).toBeTruthy();
+        });
+
+        const chatMsg = {
+            type: 'message',
+            sender: 'Alice',
+            payload: 'Hello World',
+            timestamp: Date.now()
+        };
+
+        if (mockSocket.onmessage) {
+            await React.act(async () => {
+                mockSocket.onmessage!({ data: JSON.stringify(chatMsg) } as MessageEvent);
+            });
+        }
+
+        // screen.debug(); 
+
+        // Use findByText which includes retry logic, avoiding manual waitFor
+        const msg = await screen.findByText('Hello World');
+        expect(msg).toBeInTheDocument();
+
+        // Alice appers in sidebar and message, so we expect multiple
+        const senders = await screen.findAllByText('Alice');
+        expect(senders.length).toBeGreaterThan(0);
+    });
 });
