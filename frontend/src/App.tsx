@@ -77,6 +77,7 @@ function App() {
 
         if (data.type === 'system' && data.payload?.type === 'state_update') {
           setTopics(() => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const safeTopics = (data.payload.topics as any[]).filter(t => typeof t === 'string');
             return new Set(safeTopics);
           });
