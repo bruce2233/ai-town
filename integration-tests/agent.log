@@ -1,0 +1,9 @@
+
+> agents@1.0.0 start
+> tsx src/index.ts
+
+Alice connection failed (attempt 1/20): 
+Alice successfully connected to broker
+Bob successfully connected to broker
+Geppetto successfully connected to broker
+Creator successfully connected to broker

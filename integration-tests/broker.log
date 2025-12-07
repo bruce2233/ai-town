@@ -1,0 +1,26 @@
+
+> broker@1.0.0 dev
+> nodemon --exec ts-node src/index.ts
+
+[33m[nodemon] 3.1.11[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): *.*[39m
+[33m[nodemon] watching extensions: ts,json[39m
+[32m[nodemon] starting `ts-node src/index.ts`[39m
+Broker started on port 8083
+Client connected: clc9bl
+Client clc9bl renamed to Alice
+Client Alice subscribed to town_hall
+Client connected: mwds0l
+Client mwds0l renamed to Bob
+Client Bob subscribed to town_hall
+Client connected: jfkx2n
+Client jfkx2n renamed to Geppetto
+Client Geppetto subscribed to town_hall
+Client connected: ewis38
+Client ewis38 renamed to Creator
+Client Creator subscribed to town_hall
+[TIMELINE]  [agent:Bob:inbox] Alice: {"content":"Hi Bob! Did you see my new roses?","sender":"Alice"}
+Client connected: 496dd
+Client 496dd renamed to Observer
+Client disconnected: 496dd
