@@ -25,7 +25,7 @@ import { ProviderSettings } from './ProviderSettings';
 type View = 'dashboard' | 'topics' | 'agents' | 'settings';
 
 function App() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages,] = useState<Message[]>([]);
   const [allEvents, setAllEvents] = useState<Message[]>([]); // Firehose
   const [connected, setConnected] = useState(false);
   const [agents, setAgents] = useState<Map<string, AgentStatus>>(new Map());
@@ -34,9 +34,6 @@ function App() {
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
-  const componentId = useRef(Math.random().toString(36).slice(2, 9)).current;
-
-  console.log(`App render [${componentId}]. Topics:`, Array.from(topics));
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 60000);

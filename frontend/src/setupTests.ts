@@ -3,13 +3,17 @@ import { vi } from 'vitest';
 
 // Mock WebSocket globally
 // Queue of created sockets
-(global as any).mockSockets = [];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as any).mockSockets = [];
 
 class MockWebSocket {
     send = vi.fn();
     close = vi.fn();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onopen: any = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onmessage: any = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onclose: any = null;
     readyState = 1; // OPEN
     url: string;
@@ -17,10 +21,8 @@ class MockWebSocket {
     constructor(url: string) {
         console.log('MockWebSocket created for URL:', url);
         this.url = url;
-        (global as any).mockSockets.push(this);
-        // Store instance for tests to access if needed, 
-        // or we can rely on `vi.spyOn` in tests if we want more control.
-        // For now, this class instance will be returned.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (globalThis as any).mockSockets.push(this);
     }
 }
 

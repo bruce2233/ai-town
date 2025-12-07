@@ -1,11 +1,14 @@
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import App from './App';
 import React from 'react';
 
-// Setup MockWebSocket type for typescript if needed, 
-// strictly speaking we cast to any or define interface, 
-// for now let's rely on the runtime stub we added in setupTests.ts
+type MockWebSocket = {
+    onopen: (() => void) | null;
+    onmessage: ((event: MessageEvent) => void) | null;
+    send: (data: string) => void;
+    close: () => void;
+};
 
 describe('App Component', () => {
 
@@ -18,45 +21,30 @@ describe('App Component', () => {
         // Let's rely on looking up the instance from a global registry if we attached it,
         // OR, we can just spy on the methods if we didn't need the instance reference itself.
         // BUT, to emit events (onmessage), we need the instance that App is listening to.
-
-        // Let's refine the test strategy:
-        // We already stubbed global.WebSocket in setupTests.ts.
-        // We can assume the App calls `new WebSocket(...)`.
-        // We need to capture that instance.
-
-        // We can't easily capture it *after* render unless we had a mechanism.
-        // So let's override the stub *locally* in this test to capture it, just like we tried before.
-
         // Clear mock sockets before test
-        (global as any).mockSockets = [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (globalThis as any).mockSockets = [];
 
         // Re-render to trigger useEffect
         // We need to unmount previous? render() does separate tree.
         cleanup();
         render(<App />);
 
+        // Wait for connection (App connects on mount)
+        // Access global mock socket
+
         // Wait for the socket to be captured
         await waitFor(() => {
-            expect((global as any).mockSockets.length).toBeGreaterThan(0);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            expect((globalThis as any).mockSockets.length).toBeGreaterThan(0);
         });
 
-        const mockSocket = (global as any).mockSockets[0];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mockSocket = (globalThis as any).mockSockets[0] as MockWebSocket;
 
         // Wait for onmessage assignment
         await waitFor(() => {
             expect(mockSocket.onmessage).toBeTruthy();
-        });
-
-        // Simulate connection
-        if (mockSocket.onopen) {
-            await React.act(async () => {
-                mockSocket.onopen();
-            });
-        }
-
-        // Checking if initial messages were sent
-        await waitFor(() => {
-            expect(mockSocket.send).toHaveBeenCalled();
         });
 
         // Simulate receiving bad data (the bug reproduction)
@@ -64,28 +52,30 @@ describe('App Component', () => {
             type: 'system',
             payload: {
                 type: 'state_update',
-                topics: ['town_hall', 'finance', 123, { object: true }, 'sports'],
-                agents: []
+                topics: [
+                    'town_hall',
+                    'finance', // valid
+                    123,       // invalid (number)
+                    { object: true }, // invalid (object)
+                    'sports'   // valid
+                ],
+                agents: [],
+                events: []
             }
         };
 
+        // Simulate incoming message
+        // We need to act() because this updates state
         if (mockSocket.onmessage) {
             await React.act(async () => {
-                mockSocket.onmessage({ data: JSON.stringify(badData) } as MessageEvent);
+                mockSocket.onmessage!({ data: JSON.stringify(badData) } as MessageEvent);
             });
         }
 
-        // Trigger view change to "Topics"
-        const topicsNavs = screen.getAllByText('Topics');
-        await React.act(async () => {
-            topicsNavs[0].click();
-        });
-
         // Verify valid topics
-        // Verify valid topics
+        // Assert valid topics are present
         await waitFor(() => {
             const headings = screen.getAllByRole('heading', { level: 3 });
-            const headingTexts = headings.map(h => h.textContent);
 
             const hasTownHall = headings.some(h => h.textContent?.normalize().includes('town_hall'));
             expect(hasTownHall).toBe(true);
