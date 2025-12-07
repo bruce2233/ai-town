@@ -58,8 +58,11 @@ describe('End-to-End Integration', () => {
         }
 
         // Kill processes tree
-        if (brokerProcess.pid) process.kill(-brokerProcess.pid, 'SIGKILL'); // specific to detatched group, but here simple kill might suffice if shell=false, but we used shell=true
-        // Using tree kill approach or simple kill:
+        try {
+            if (brokerProcess.pid) process.kill(-brokerProcess.pid, 'SIGKILL');
+        } catch (e) {
+            // Ignore if process is already dead
+        }        // Using tree kill approach or simple kill:
         try { brokerProcess.kill(); } catch (e) { }
         try { agentProcess.kill(); } catch (e) { }
     });
