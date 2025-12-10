@@ -15,7 +15,7 @@ describe('Agent Store (Functional Logic)', () => {
 
     it('should transition to THINKING and emit CALL_LLM when message received', () => {
         const store = createAgentStore(config);
-        const msg: Message = { type: 'message', sender: 'User', content: 'Hello', topic: 'town_hall' };
+        const msg: Message = { type: 'message', sender: 'User', payload: { content: 'Hello' }, topic: 'town_hall' };
 
         store.dispatch(messageReceived(msg));
 
@@ -31,13 +31,14 @@ describe('Agent Store (Functional Logic)', () => {
     it('should emit EXECUTE_TOOL when LLM requests a tool', () => {
         const store = createAgentStore(config);
         // Manually set state to THINKING for test
-        const msg: Message = { type: 'message', sender: 'User', content: 'Broadcast this', topic: 'town_hall' };
+        const msg: Message = { type: 'message', sender: 'User', payload: { content: 'Broadcast this' }, topic: 'town_hall' };
         store.dispatch(messageReceived(msg));
         store.dispatch(consumeEffects()); // Clear effects
 
         const toolMsg: ChatCompletionMessage = {
             role: 'assistant',
             content: null,
+            refusal: null,
             tool_calls: [{
                 id: 'call_123',
                 type: 'function',
@@ -51,6 +52,7 @@ describe('Agent Store (Functional Logic)', () => {
         expect(state.status).toBe('EXECUTING_TOOL');
         expect(state.effects).toHaveLength(1);
         expect(state.effects[0].type).toBe('EXECUTE_TOOL');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         expect((state.effects[0] as any).toolCall.id).toBe('call_123'); // Cast to check internal prop
     });
 
@@ -64,6 +66,7 @@ describe('Agent Store (Functional Logic)', () => {
         const toolMsg: ChatCompletionMessage = {
             role: 'assistant',
             content: null,
+            refusal: null,
             tool_calls: [{ id: 'call_123', type: 'function', function: { name: 'broadcast_message', arguments: '{}' } }]
         };
         store.dispatch(llmCompleted(toolMsg));
@@ -86,6 +89,7 @@ describe('Agent Store (Functional Logic)', () => {
         const replyMsg: ChatCompletionMessage = {
             role: 'assistant',
             content: 'I agree!',
+            refusal: null,
             tool_calls: []
         };
 
@@ -96,6 +100,7 @@ describe('Agent Store (Functional Logic)', () => {
         expect(state.workingMemory).toHaveLength(0);
         expect(state.effects).toHaveLength(1);
         expect(state.effects[0].type).toBe('PUBLISH');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         expect((state.effects[0] as any).content).toBe('I agree!');
     });
 });

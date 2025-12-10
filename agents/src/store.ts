@@ -5,16 +5,15 @@ import { TOOLS, getToolByName } from './tools.js';
 import { ChatCompletionMessage, ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // Helper to build system prompt (same as before)
-const SYSTEM_TEMPLATE = `You are \${name}. Persona: \${persona}.
-You are in AI Town. 
-Received message from "\${sender}" on topic "\${topic}": "\${content}"
-
-INSTRUCTIONS:
-- If you want to send a message to a specific topic, start your message with:
-  >>> TO: <topic_name>
-  followed by your message content.
-- If you just want to reply to the current topic context, simply type your message.
-`;
+const SYSTEM_TEMPLATE = "You are ${name}. Persona: ${persona}.\n" +
+    "You are in AI Town. \n" +
+    "Received message from \"${sender}\" on topic \"${topic}\": \"${content}\"\n" +
+    "\n" +
+    "INSTRUCTIONS:\n" +
+    "- If you want to send a message to a specific topic, start your message with:\n" +
+    "  >>> TO: <topic_name>\n" +
+    "  followed by your message content.\n" +
+    "- If you just want to reply to the current topic context, simply type your message.\n";
 
 function buildSystemPrompt(config: AgentConfig, msg: Message): string {
     let p = SYSTEM_TEMPLATE.replace('\${name}', config.name).replace('\${persona}', config.persona);
