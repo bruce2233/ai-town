@@ -13,8 +13,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@reduxjs/toolkit": "^2.11.1",
     "dotenv": "^17.2.3",
     "openai": "^4.0.0",
+    "redux": "^5.0.1",
     "tsx": "^4.21.0",
     "ws": "^8.0.0"
   },
