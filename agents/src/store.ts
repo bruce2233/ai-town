@@ -1,8 +1,8 @@
 
 import { configureStore, createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { AgentState, AgentConfig, Message, Effect, ToolCall, AgentEvent } from './types.js'; // Ensure AgentEvent types are compatible or redeclared
+import { AgentState, AgentConfig, Message } from './types.js'; // Ensure AgentEvent types are compatible or redeclared
 import { TOOLS, getToolByName } from './tools.js';
-import { ChatCompletionMessage, ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import { ChatCompletionMessage } from 'openai/resources/chat/completions';
 
 // Helper to build system prompt (same as before)
 const SYSTEM_TEMPLATE = "You are ${name}. Persona: ${persona}.\n" +
@@ -16,10 +16,10 @@ const SYSTEM_TEMPLATE = "You are ${name}. Persona: ${persona}.\n" +
     "- If you just want to reply to the current topic context, simply type your message.\n";
 
 function buildSystemPrompt(config: AgentConfig, msg: Message): string {
-    let p = SYSTEM_TEMPLATE.replace('\${name}', config.name).replace('\${persona}', config.persona);
-    p = p.replace('\${sender}', msg.sender || 'unknown');
-    p = p.replace('\${topic}', msg.topic || 'unknown');
-    p = p.replace('\${content}', JSON.stringify(msg.payload || ''));
+    let p = SYSTEM_TEMPLATE.replace('${name}', config.name).replace('${persona}', config.persona);
+    p = p.replace('${sender}', msg.sender || 'unknown');
+    p = p.replace('${topic}', msg.topic || 'unknown');
+    p = p.replace('${content}', JSON.stringify(msg.payload || ''));
     return p;
 }
 
@@ -64,7 +64,8 @@ const agentSlice = createSlice({
                 { role: 'user', content: 'How do you respond?' }
             ];
 
-            state.effects.push({ type: 'CALL_LLM', messages: state.workingMemory, tools: TOOLS });
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            state.effects.push({ type: 'CALL_LLM', messages: state.workingMemory, tools: TOOLS.map(({ execute, ...rest }) => rest) });
         },
         llmCompleted: (state, action: PayloadAction<ChatCompletionMessage>) => {
             if (state.status !== 'THINKING') return;
@@ -80,13 +81,13 @@ const agentSlice = createSlice({
                     state.status = 'EXECUTING_TOOL';
                     state.effects.push({
                         type: 'EXECUTE_TOOL',
-                        toolCall: { id: toolCall.id, function: toolCall.function },
-                        def: toolDef
+                        toolCall: { id: toolCall.id, function: toolCall.function }
                     });
                 } else {
                     // Error handling for missing tool
                     state.workingMemory.push({ role: 'tool', tool_call_id: toolCall.id, content: 'Error: Tool not found' });
-                    state.effects.push({ type: 'CALL_LLM', messages: state.workingMemory, tools: TOOLS });
+                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                    state.effects.push({ type: 'CALL_LLM', messages: state.workingMemory, tools: TOOLS.map(({ execute, ...rest }) => rest) });
                 }
             } else {
                 // Text Reply
@@ -119,7 +120,8 @@ const agentSlice = createSlice({
                 state.status = 'IDLE';
             } else {
                 state.status = 'THINKING';
-                state.effects.push({ type: 'CALL_LLM', messages: state.workingMemory, tools: TOOLS });
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                state.effects.push({ type: 'CALL_LLM', messages: state.workingMemory, tools: TOOLS.map(({ execute, ...rest }) => rest) });
             }
         },
         errorOccurred: (state, action: PayloadAction<string>) => {

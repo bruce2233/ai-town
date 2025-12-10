@@ -3,6 +3,7 @@ import WebSocket from 'ws';
 import OpenAI from 'openai';
 import { AgentConfig, Effect } from './types.js'; // AgentState unused, store has it
 import { createAgentStore, AppStore, messageReceived, llmCompleted, toolCompleted, errorOccurred, consumeEffects } from './store.js';
+import { getToolByName } from './tools.js';
 
 // Env Config
 const BROKER_URL = process.env.BROKER_URL || 'ws://localhost:8080';
@@ -139,20 +140,27 @@ export class AgentRuntime {
                     if (msg) {
                         this.store.dispatch(llmCompleted(msg));
                     }
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 } catch (e: any) {
                     console.error('LLM Failed', e);
                     this.store.dispatch(errorOccurred(e.message));
                 }
                 break;
 
-            case 'EXECUTE_TOOL':
+            case 'EXECUTE_TOOL': {
                 try {
+                    const toolName = effect.toolCall.function.name;
+                    const def = getToolByName(toolName);
+                    if (!def) {
+                        throw new Error(`Tool ${toolName} not found`);
+                    }
                     const args = JSON.parse(effect.toolCall.function.arguments);
-                    const result = await effect.def.execute(args);
+                    const result = await def.execute(args);
                     this.store.dispatch(toolCompleted({
                         callId: effect.toolCall.id,
                         result
                     }));
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 } catch (e: any) {
                     console.error('Tool Exec Failed', e);
                     this.store.dispatch(toolCompleted({
@@ -161,6 +169,7 @@ export class AgentRuntime {
                     }));
                 }
                 break;
+            }
         }
     }
 }
