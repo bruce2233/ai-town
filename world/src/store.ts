@@ -123,7 +123,8 @@ export const createAgentStore = (config: AgentConfig, runSagas = true) => {
 
     // Run the Saga
     if (runSagas) {
-        sagaMiddleware.run(rootSaga);
+        const task = sagaMiddleware.run(rootSaga);
+        (store as any).rootTask = task;
     }
 
     return store;

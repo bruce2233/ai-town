@@ -47,9 +47,23 @@ const { firstValueFrom, filter } = await import('rxjs');
 
 describe('Simulation Integration Tests', () => {
     // Helpers to create test agents
+    const createdStores: any[] = [];
+
+    // Helpers to create test agents
     const createTestAgent = (name: string) => {
-        return createAgentStore({ name, persona: 'Test Bot' });
+        const store = createAgentStore({ name, persona: 'Test Bot' });
+        createdStores.push(store);
+        return store;
     };
+
+    afterEach(() => {
+        createdStores.forEach(store => {
+            if (store.rootTask) {
+                store.rootTask.cancel();
+            }
+        });
+        createdStores.length = 0;
+    });
 
     it('Scenario 1: Town Hall Broadcast', async () => {
         const alice = createTestAgent('Alice');
