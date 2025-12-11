@@ -1,7 +1,7 @@
 import { WebSocketServer } from 'ws';
 import { AgentRegistry } from './registry.js';
 import { AgentRuntime } from './runtime.js';
-import { globalRouter } from './town/router.js';
+import { globalRouter, TownEvent } from './town/router.js';
 
 // Port for UI/Tests to connect
 const PORT = parseInt(process.env.PORT || '8080', 10);
@@ -14,10 +14,15 @@ async function main() {
 
     console.log(`Booting ${agents.length} agents...`);
 
+    const runtimeMap = new Map<string, AgentRuntime>();
     for (const config of agents) {
         const runtime = new AgentRuntime(config);
         runtime.start();
+        runtimeMap.set(config.name, runtime);
     }
+
+    // Keep basic in-memory history
+    const history: TownEvent[] = [];
 
     // --- WebSocket Server (Output Adapter) ---
     const wss = new WebSocketServer({ port: PORT, host: '0.0.0.0' });
@@ -34,6 +39,26 @@ async function main() {
                 // In serverless, everyone subscribes to everything essentially for monitoring.
                 if (data.type === 'identify') {
                     // console.log('Client identified:', data.payload.id);
+                }
+                if (data.type === 'get_state') {
+                    const agentStates = Array.from(runtimeMap.values()).map(r => r.getState());
+                    ws.send(JSON.stringify({
+                        type: 'system',
+                        payload: {
+                            type: 'state_update',
+                            agents: agentStates,
+                            topics: ['town_hall', 'system:status']
+                        }
+                    }));
+                }
+                if (data.type === 'get_history') {
+                    ws.send(JSON.stringify({
+                        type: 'system',
+                        payload: {
+                            type: 'history_replay',
+                            events: history
+                        }
+                    }));
                 }
                 if (data.type === 'publish') {
                     // Inject into Router if admin sends message
@@ -52,6 +77,10 @@ async function main() {
 
     // Forward Router events to all clients
     globalRouter.asObservable().subscribe(evt => {
+        // Add to history
+        history.push(evt);
+        if (history.length > 500) history.shift();
+
         const msg = JSON.stringify(evt);
         wss.clients.forEach(client => {
             if (client.readyState === 1) { // OPEN
