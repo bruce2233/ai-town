@@ -16,6 +16,8 @@ services:
 
   world:
     build: ./world
+    ports:
+      - "8080:8080"
     depends_on:
       - llm-gateway
     volumes:
