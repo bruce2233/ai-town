@@ -53,12 +53,22 @@ function App() {
     ws.current = socket;
 
     socket.onopen = () => {
+      console.log('WS Connected');
       setConnected(true);
       socket.send(JSON.stringify({ type: 'identify', payload: { id: 'Observer' } }));
       socket.send(JSON.stringify({ type: 'subscribe', topic: 'town_hall' }));
-      socket.send(JSON.stringify({ type: 'subscribe', topic: '*' })); // Subscribe to Firehose
+      socket.send(JSON.stringify({ type: 'subscribe', topic: '*' }));
       socket.send(JSON.stringify({ type: 'get_state' }));
       socket.send(JSON.stringify({ type: 'get_history' }));
+    };
+
+    socket.onclose = (event) => {
+      console.log('WS Closed', event.code, event.reason);
+      setConnected(false);
+    };
+
+    socket.onerror = (error) => {
+      console.error('WS Error', error);
     };
 
     socket.onmessage = (event) => {
@@ -149,7 +159,10 @@ function App() {
     }, 5000);
 
     return () => {
-      socket.close();
+      console.log('Cleaning up WS');
+      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+        socket.close();
+      }
       clearInterval(interval);
     };
   }, []);
