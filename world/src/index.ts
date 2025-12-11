@@ -42,6 +42,8 @@ async function main() {
                 }
                 if (data.type === 'get_state') {
                     const agentStates = Array.from(runtimeMap.values()).map(r => r.getState());
+                    console.log(`[WebSocket] Handling get_state. Sending ${agentStates.length} agents.`);
+                    // console.log('Sample Agent State:', JSON.stringify(agentStates[0])); 
                     ws.send(JSON.stringify({
                         type: 'system',
                         payload: {
@@ -70,7 +72,7 @@ async function main() {
                     });
                 }
             } catch (e) {
-                // ignore
+                console.error('WebSocket Handling Error:', e);
             }
         });
     });

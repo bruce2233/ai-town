@@ -99,6 +99,7 @@ function App() {
           }
 
           if (data.type === 'system' && data.payload?.type === 'state_update') {
+            console.log('[App] Received state_update', data.payload);
             setTopics(() => {
               const rawTopics = data.payload.topics;
               const safeTopics = Array.isArray(rawTopics)
