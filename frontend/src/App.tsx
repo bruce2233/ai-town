@@ -49,121 +49,146 @@ function App() {
     const host = window.location.hostname;
     // Use env var if available, otherwise default to same host on port 8080
     const wsUrl = import.meta.env.VITE_BROKER_URL || `${protocol}//${host}:8080`;
-    const socket = new WebSocket(wsUrl);
-    ws.current = socket;
 
-    socket.onopen = () => {
-      console.log('WS Connected');
-      setConnected(true);
-      socket.send(JSON.stringify({ type: 'identify', payload: { id: 'Observer' } }));
-      socket.send(JSON.stringify({ type: 'subscribe', topic: 'town_hall' }));
-      socket.send(JSON.stringify({ type: 'subscribe', topic: '*' }));
-      socket.send(JSON.stringify({ type: 'get_state' }));
-      socket.send(JSON.stringify({ type: 'get_history' }));
-    };
+    // Debounce connection to handle React Strict Mode double-mount
+    const connectTimer = setTimeout(() => {
+      console.log('Initiating WS Connection...');
+      const socket = new WebSocket(wsUrl);
+      ws.current = socket;
 
-    socket.onclose = (event) => {
-      console.log('WS Closed', event.code, event.reason);
-      setConnected(false);
-    };
-
-    socket.onerror = (error) => {
-      console.error('WS Error', error);
-    };
-
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-
-        // Firehose
-        if (data.type === 'message' || data.type === 'system') {
-          if (data.payload?.type === 'history_replay') {
-            console.log('Received history:', data.payload.events.length);
-            const history = data.payload.events;
-            setAllEvents(prev => [...history, ...prev].sort((a: Message, b: Message) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 500));
-            // Also restore chat messages from history
-            const chatHistory = history.filter((m: Message) => m.type === 'message');
-            setMessages(prev => [...chatHistory, ...prev].sort((a: Message, b: Message) => (a.timestamp || 0) - (b.timestamp || 0)));
-          } else {
-            setAllEvents(prev => [data, ...prev].slice(0, 500)); // Keep last 500
-          }
-        }
-
-        // Live Chat Messages
-        if (data.type === 'message' && data.sender) {
-          setMessages(prev => [...prev, data]);
-        }
-
-        if (data.type === 'system' && data.payload?.type === 'state_update') {
-          setTopics(() => {
-            const rawTopics = data.payload.topics;
-            const safeTopics = Array.isArray(rawTopics)
-              ? rawTopics.filter((t: unknown): t is string => typeof t === 'string')
-              : [];
-            return new Set(safeTopics);
-          });
-          setAgents(prev => {
-            const newAgents = new Map(prev);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            data.payload.agents.forEach((a: any) => {
-              const existing = newAgents.get(a.id);
-              newAgents.set(a.id, { ...existing, ...a, lastSeen: Date.now() });
-            });
-            return newAgents;
-          });
-        } // Close state_update block
-
-        if (data.topic && typeof data.topic === 'string') {
-          setTopics(prev => new Set(prev).add(data.topic!));
-        }
-
-        // Handle Agent Status Heartbeat
-        if (data.topic === 'system:status' && data.sender) {
-          const status = typeof data.payload === 'string' ? JSON.parse(data.payload) : data.payload;
-          setAgents(prev => {
-            const newMap = new Map(prev);
-            const existing = newMap.get(data.sender!) || { id: data.sender!, subscriptions: [] };
-            newMap.set(data.sender!, {
-              ...existing,
-              ...status,
-              lastSeen: Date.now()
-            });
-            return newMap;
-          });
-        } else if (data.sender) {
-          // Regular message update
-          setAgents(prev => {
-            const newMap = new Map(prev);
-            const key = data.sender!;
-            newMap.set(key, {
-              id: key,
-              name: key,
-              subscriptions: newMap.get(key)?.subscriptions || [],
-              lastSeen: Date.now(),
-              ...newMap.get(key)
-            });
-            return newMap;
-          });
-        }
-      } catch (e) {
-        console.error('Error parsing message', e);
-      }
-    };
-
-    socket.onclose = () => setConnected(false);
-
-    const interval = setInterval(() => {
-      if (socket.readyState === WebSocket.OPEN) {
+      socket.onopen = () => {
+        console.log('WS Connected');
+        setConnected(true);
+        socket.send(JSON.stringify({ type: 'identify', payload: { id: 'Observer' } }));
+        socket.send(JSON.stringify({ type: 'subscribe', topic: 'town_hall' }));
+        socket.send(JSON.stringify({ type: 'subscribe', topic: '*' }));
         socket.send(JSON.stringify({ type: 'get_state' }));
-      }
-    }, 5000);
+        socket.send(JSON.stringify({ type: 'get_history' }));
+      };
+
+      socket.onclose = (event) => {
+        console.log('WS Closed', event.code, event.reason);
+        setConnected(false);
+      };
+
+      socket.onerror = (error) => {
+        console.error('WS Error', error);
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          // Firehose
+          if (data.type === 'message' || data.type === 'system') {
+            if (data.payload?.type === 'history_replay') {
+              console.log('Received history:', data.payload.events.length);
+              const history = data.payload.events;
+              setAllEvents(prev => [...history, ...prev].sort((a: Message, b: Message) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 500));
+              // Also restore chat messages from history
+              const chatHistory = history.filter((m: Message) => m.type === 'message');
+              setMessages(prev => [...chatHistory, ...prev].sort((a: Message, b: Message) => (a.timestamp || 0) - (b.timestamp || 0)));
+            } else {
+              setAllEvents(prev => [data, ...prev].slice(0, 500)); // Keep last 500
+            }
+          }
+
+          // Live Chat Messages
+          if (data.type === 'message' && data.sender) {
+            setMessages(prev => [...prev, data]);
+          }
+
+          if (data.type === 'system' && data.payload?.type === 'state_update') {
+            setTopics(() => {
+              const rawTopics = data.payload.topics;
+              const safeTopics = Array.isArray(rawTopics)
+                ? rawTopics.filter((t: unknown): t is string => typeof t === 'string')
+                : [];
+              return new Set(safeTopics);
+            });
+            setAgents(prev => {
+              const newAgents = new Map(prev);
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              data.payload.agents.forEach((a: any) => {
+                const existing = newAgents.get(a.id);
+                newAgents.set(a.id, { ...existing, ...a, lastSeen: Date.now() });
+              });
+              return newAgents;
+            });
+          } // Close state_update block
+
+          if (data.topic && typeof data.topic === 'string') {
+            setTopics(prev => new Set(prev).add(data.topic!));
+          }
+
+          // Handle Agent Status Heartbeat
+          if (data.topic === 'system:status' && data.sender) {
+            const status = typeof data.payload === 'string' ? JSON.parse(data.payload) : data.payload;
+            setAgents(prev => {
+              const newMap = new Map(prev);
+              const existing = newMap.get(data.sender!) || { id: data.sender!, subscriptions: [] };
+              newMap.set(data.sender!, {
+                ...existing,
+                ...status,
+                lastSeen: Date.now()
+              });
+              return newMap;
+            });
+          } else if (data.sender) {
+            // Regular message update
+            setAgents(prev => {
+              const newMap = new Map(prev);
+              const key = data.sender!;
+              newMap.set(key, {
+                id: key,
+                name: key,
+                subscriptions: newMap.get(key)?.subscriptions || [],
+                lastSeen: Date.now(),
+                ...newMap.get(key)
+              });
+              return newMap;
+            });
+          }
+        } catch (e) {
+          console.error('Error parsing message', e);
+        }
+      };
+
+      // Poll for state updates to keep UI fresh
+      const interval = setInterval(() => {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: 'get_state' }));
+        }
+      }, 5000);
+
+      // Attach interval to socket object loosely or track it via another ref if needed, 
+      // but for simplicity we rely on closure or cleanup logic.
+      // We need to pass the interval ID out to cleanup function.
+      // Easiest is to store interval on the socket object (any cast) or use a separate Ref.
+      // Let's use a property on the socket for cleanup.
+      (socket as any)._heartbeatInterval = interval;
+
+      socket.onclose = () => {
+        setConnected(false);
+        clearInterval(interval);
+      };
+
+    }, 100); // 100ms debounce
 
     return () => {
+      // Clear timer so connection is never made if quickly unmounted
+      clearTimeout(connectTimer);
+
       console.log('Cleaning up WS');
-      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
-        socket.close();
+      if (ws.current) {
+        const socket = ws.current;
+        if ((socket as any)._heartbeatInterval) clearInterval((socket as any)._heartbeatInterval);
+
+        if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+          socket.close();
+        }
+        ws.current = null;
       }
-      clearInterval(interval);
     };
   }, []);
 
