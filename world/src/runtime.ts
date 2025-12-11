@@ -14,4 +14,8 @@ export class AgentRuntime {
         const state = this.store.getState();
         console.log(`[${state.agent.id}] Agent started.`);
     }
+
+    public getState() {
+        return this.store.getState().agent;
+    }
 }
