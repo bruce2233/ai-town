@@ -57,11 +57,18 @@ describe('End-to-End Integration', () => {
                 console.log('Frontend Client connected');
                 clientSocket.send(JSON.stringify({ type: 'identify', payload: { id: 'Observer' } }));
                 clientSocket.send(JSON.stringify({ type: 'subscribe', topic: '*' }));
+                // Request state to verify persistence/boot
+                clientSocket.send(JSON.stringify({ type: 'get_state' }));
             });
 
             clientSocket.on('message', (data) => {
                 const msg = JSON.parse(data.toString());
                 receivedMessages.push(msg);
+
+                // Verify we get the state update
+                if (msg.type === 'system' && msg.payload?.type === 'state_update') {
+                    console.log('Received State Update with agents:', msg.payload.agents.length);
+                }
 
                 // Check if we received a chat message from an agent
                 if (msg.type === 'message' && msg.sender && msg.sender !== 'Observer') {
