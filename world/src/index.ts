@@ -20,8 +20,8 @@ async function main() {
     }
 
     // --- WebSocket Server (Output Adapter) ---
-    const wss = new WebSocketServer({ port: PORT });
-    console.log(`WebSocket Server listening on port ${PORT}`);
+    const wss = new WebSocketServer({ port: PORT, host: '0.0.0.0' });
+    console.log(`WebSocket Server listening on port ${PORT} (0.0.0.0)`);
 
     wss.on('connection', (ws) => {
         console.log('New client connected');
