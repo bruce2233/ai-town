@@ -1,23 +1,21 @@
 {
   "name": "ai-town",
   "version": "1.0.0",
-  "description": "AI Town - Multi-agent autonomous community",
-  "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "test": "vitest",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "tsx src/index.ts",
+    "start:mock": "USE_MOCK=true tsx src/index.ts",
+    "test": "vitest run --exclude src/integration.test.ts",
+    "test:integration": "vitest run src/integration.test.ts"
   },
   "dependencies": {
-    "effect": "^3.0.0"
+    "effect": "^3.10.0"
   },
   "devDependencies": {
-    "typescript": "^5.0.0",
-    "vitest": "^1.0.0",
-    "@types/node": "^20.0.0"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+    "@types/node": "^22.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
 }

@@ -29,6 +29,6 @@ export const AssetManagerMock = Effect.succeed(
                     assetType: prompt.assetType,
                     url: `assets/${prompt.assetType.toLowerCase()}/${prompt.id}.png` // Fake URL
                 };
-            }),
+            }).pipe(Effect.orDie),
     })
 );

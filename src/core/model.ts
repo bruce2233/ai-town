@@ -34,7 +34,17 @@ export type AgentState = Schema.Schema.Type<typeof AgentState>;
 
 export const GlobalState = Schema.Struct({
     tick: Schema.Number,
-    agents: Schema.Record({ key: AgentId, value: AgentState }),
+    agents: Schema.Record({
+        key: AgentId,
+        value: Schema.Struct({
+            id: AgentId,
+            name: Schema.String,
+            description: Schema.String,
+            locationId: LocationId,
+            status: Schema.String, // e.g. "Standing idly", "Talking to Bob" (Text-Native)
+            memory: Schema.Record({ key: Schema.String, value: Schema.Any }),
+        }),
+    }),
     locations: Schema.Record({
         key: LocationId,
         value: Schema.Struct({
@@ -43,6 +53,7 @@ export const GlobalState = Schema.Struct({
             description: Schema.String,
         }),
     }),
+    history: Schema.Array(Schema.String), // "The Story So Far"
 });
 export type GlobalState = Schema.Schema.Type<typeof GlobalState>;
 

@@ -18,7 +18,17 @@ export const SpeakIntent = Schema.Struct({
     content: Schema.String,
 });
 
-export const Intent = Schema.Union(MoveIntent, SpeakIntent);
+export interface ActionIntent {
+    readonly _tag: "Action";
+    readonly agentId: AgentId;
+    readonly instruction: string; // e.g. "Walk to the park", "Sit down"
+}
+
+export const Intent = Schema.Union(MoveIntent, SpeakIntent, Schema.Struct({
+    _tag: Schema.Literal("Action"),
+    agentId: AgentId,
+    instruction: Schema.String,
+}));
 export type Intent = Schema.Schema.Type<typeof Intent>;
 
 export type MoveIntent = Schema.Schema.Type<typeof MoveIntent>;

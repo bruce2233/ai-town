@@ -1,4 +1,4 @@
-import { Effect, Schedule } from "effect";
+import { Effect, Schema, Schedule } from "effect";
 import {
     AgentView,
     Intent,
@@ -7,6 +7,7 @@ import {
     LocationId,
     LLMService,
     SpeakIntent,
+    ActionIntent
 } from "../core/index.js";
 
 // ---------------------------------------------
@@ -50,38 +51,23 @@ You are an AI Agent in a simulated town.
 ${view.description}
 
 Available Actions:
-- Move to a location (loc_0, loc_1, loc_2, loc_3, loc_4)
-- Speak to someone
+- Describe what you want to do next in natural language based on the recent events.
+- BE CREATIVE and REACTIVE. Do NOT repeat the same action if you just did it.
+- If you are at the destination, interact with someone or look around.
 
 Decide your next action based on your description and return JSON.
 Format:
-{ "_tag": "Move", "targetLocationId": "loc_X" }
-OR
-{ "_tag": "Speak", "content": "Hello", "targetAgentId": "agent_X" }
+{ "_tag": "Action", "instruction": "I walk to the park" }
 `;
 
-                    // Call LLM (In reality, we would validate the schema here)
-                    // For the Mock, we need to ensure it returns something valid or we default to random
-                    const responseStr = yield* llm.generateCompletion(prompt);
+                    // Call LLM
+                    const response = yield* llm.generateJson(prompt, Schema.Any);
 
-                    // MOCK HACK: Since our mock just returns text, we'll parse it or fallback.
-                    // ideally LLMService.generateJson would be used.
-
-                    // Let's assume for this MVP step we stick to Random if LLM fails or Mock is dumb
-                    // But to prove it works, let's try to interpret the Mock response
-
-                    // For now, let's just make the Mock "Simulated Intelligence" return a valid MoveIntent
-                    // inside the LLMService (or here if we want to fake it locally).
-
-                    // REAL implementation would be:
-                    // const intent = yield* llm.generateJson(prompt, IntentSchema);
-
-                    // FALLBACK to Random for stability if LLM is mock text
                     return {
-                        _tag: "Move",
+                        _tag: "Action",
                         agentId: id,
-                        targetLocationId: `loc_${Math.floor(Math.random() * 5)}` as LocationId
-                    } as MoveIntent;
+                        instruction: (response as any).instruction || "I wait."
+                    } as ActionIntent;
                 }),
         };
     });

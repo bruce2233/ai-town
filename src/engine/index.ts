@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import {
     GlobalState,
     Event,
@@ -6,6 +6,7 @@ import {
     Intent,
     MoveIntent,
     LLMService,
+    AgentId,
 } from "../core/index.js";
 
 // ---------------------------------------------
@@ -26,42 +27,70 @@ export const createEngine = (): Effect.Effect<ResolutionEngine, never, LLMServic
                     const events: Event[] = [];
 
                     // 1. Construct World DM Prompt
-                    // In a real system, we would dump the state diff and intents to the LLM
-                    const prompt = `
-Current State Stick: ${state.tick}
-Intents: ${JSON.stringify(intents)}
-Resolve conflicts and return allowed moves.
-`;
-                    // 2. Call LLM (Mocked for now)
-                    const _response = yield* llm.generateCompletion(prompt);
+                    const recentHistory = state.history.slice(-3).join("\n");
+                    const agentStates = Object.values(state.agents).map(a => `- ${a.name} is at ${state.locations[a.locationId].name} (${a.status})`).join("\n");
 
-                    // 3. Apply changes (Deterministic fallback for MVP stability)
+                    let actionText = "";
                     for (const intent of intents) {
-                        if (intent._tag === "Move") {
-                            const move = intent as MoveIntent;
-                            // Cast to any to bypass readonly check for MVP mutable update on cloned state
-                            const agent = (newState.agents as any)[move.agentId];
+                        if (intent._tag === "Action") {
+                            const agent = state.agents[intent.agentId];
+                            actionText += `- ${agent.name} wants to: ${intent.instruction}\n`;
+                        } else if (intent._tag === "Move") {
+                            // Legacy support or specific handling
+                            const agent = state.agents[intent.agentId];
+                            actionText += `- ${agent.name} wants to move to ${intent.targetLocationId}\n`;
+                        }
+                    }
+
+                    const prompt = `
+The Story So Far:
+${recentHistory}
+
+Current Situation:
+${agentStates}
+
+Agent Actions:
+${actionText}
+
+Determine the outcome. Return JSON:
+{
+  "narrative": "A short paragraph describing what happens.",
+  "updates": {
+    "agent_id": { "status": "New Status", "locationId": "optional_new_loc_id" }
+  }
+}
+`;
+                    // 2. Call LLM
+                    const result = yield* llm.generateJson(prompt, Schema.Any) as any;
+
+                    // 3. Apply changes
+                    (newState.history as string[]).push(result.narrative || "Nothing happened.");
+
+                    if (result.updates) {
+                        for (const [agentId, update] of Object.entries(result.updates)) {
+                            const agent = (newState.agents as any)[agentId];
                             if (agent) {
-                                // TODO: Check if location exists and is valid (LLM would do this)
-                                const location = newState.locations[move.targetLocationId];
-                                if (location) {
-                                    agent.locationId = move.targetLocationId;
+                                if ((update as any).status) {
+                                    agent.status = (update as any).status;
+                                }
+                                if ((update as any).locationId && newState.locations[(update as any).locationId]) {
+                                    agent.locationId = (update as any).locationId;
                                     events.push({
                                         id: Math.random().toString(36).substring(7),
                                         timestamp: Date.now(),
                                         type: "AGENT_MOVED",
-                                        payload: { agentId: move.agentId, to: move.targetLocationId },
+                                        payload: { agentId: agentId as AgentId, to: (update as any).locationId },
                                     });
                                 }
                             }
-                        } else if (intent._tag === "Speak") {
-                            // TODO: Handle Speak
                         }
                     }
 
                     (newState as any).tick++;
 
                     return { state: newState, events };
-                }),
+                }).pipe(
+                    Effect.mapError(e => new Error(String(e)))
+                ) as unknown as Effect.Effect<{ state: GlobalState; events: ReadonlyArray<Event> }, Error>,
         };
     });

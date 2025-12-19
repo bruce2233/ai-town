@@ -1,5 +1,5 @@
 import { Effect, Console } from "effect";
-import { GlobalState, AgentId, LocationId, AgentState, project, LLMService, LLMServiceLive } from "./core/index.js";
+import { GlobalState, AgentId, LocationId, AgentState, project, LLMService, LLMServiceLive, LLMServiceMock } from "./core/index.js";
 import { createEngine } from "./engine/index.js";
 import { createLLMAgent } from "./agents/index.js";
 import { PromptEngineLive, AssetManagerMock } from "./media/index.js";
@@ -20,6 +20,7 @@ const runSimulation = Effect.gen(function* (_) {
                 name: "Alice",
                 description: "A wanderer looking for secrets.",
                 locationId: "loc_0" as LocationId,
+                status: "Checking her map",
                 memory: {},
             },
             ["agent_2" as AgentId]: {
@@ -27,6 +28,7 @@ const runSimulation = Effect.gen(function* (_) {
                 name: "Bob",
                 description: "A merchant looking for customers.",
                 locationId: "loc_1" as LocationId,
+                status: "Setting up his stall",
                 memory: {},
             },
         },
@@ -36,7 +38,8 @@ const runSimulation = Effect.gen(function* (_) {
             ["loc_2" as LocationId]: { id: "loc_2" as LocationId, name: "Shop", description: "Buy things" },
             ["loc_3" as LocationId]: { id: "loc_3" as LocationId, name: "Forest", description: "Dark trees" },
             ["loc_4" as LocationId]: { id: "loc_4" as LocationId, name: "Lake", description: "Blue water" }
-        }
+        },
+        history: []
     };
 
     // Create dependencies
@@ -51,18 +54,26 @@ const runSimulation = Effect.gen(function* (_) {
     // 2. Game Loop (5 ticks)
     for (let i = 0; i < 5; i++) {
         yield* Console.log(`\n--- Tick ${state.tick} ---`);
+        if (state.history.length > 0) {
+            yield* Console.log(`NARRATIVE: ${state.history[state.history.length - 1]}`);
+        }
 
         const intents = [];
         for (const agent of agents) {
             // 2a. Projection (Text Description)
-            const view = project(state, agent.id);
+            const view = yield* project(state, agent.id);
 
             // 2b. Policy (LLM Decision)
             const intent = yield* agent.act(view);
             intents.push(intent);
-            yield* Console.log(`Agent ${agent.id} decided to ${intent._tag} to ${(intent as any).targetLocationId || '?'}`);
         }
-
+        for (const intent of intents) {
+            if (intent._tag === "Action") {
+                Console.log(`Agent ${intent.agentId} decided to: "${intent.instruction}"`).pipe(Effect.runSync);
+            } else if (intent._tag === "Move") {
+                Console.log(`Agent ${intent.agentId} decided to Move to ${intent.targetLocationId}`).pipe(Effect.runSync);
+            }
+        }
         // 2c. Resolution (LLM DM)
         const result = yield* engine.resolve(intents, state);
         state = result.state;
@@ -86,6 +97,10 @@ const runSimulation = Effect.gen(function* (_) {
     yield* Console.log("\nSimulation finished.");
 });
 
-// Provide the Mock Service to the Main Effect
-// Provide the Mock Service to the Main Effect
-Effect.runPromise(runSimulation.pipe(Effect.provideServiceEffect(LLMService, LLMServiceLive)));
+// Provide the Service to the Main Effect based on Env Var
+const useMock = process.env.USE_MOCK === "true";
+const LLMProvider = useMock ? LLMServiceMock : LLMServiceLive;
+
+console.log(`Using ${useMock ? "MOCK" : "REAL"} LLM Service.`);
+
+Effect.runPromise(runSimulation.pipe(Effect.provideServiceEffect(LLMService, LLMProvider), Effect.orDie));

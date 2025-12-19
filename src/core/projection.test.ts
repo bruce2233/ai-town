@@ -1,38 +1,54 @@
 import { describe, it, expect } from "vitest";
-import { project, GlobalState, AgentId, LocationId } from "./index.js";
+import { Effect } from "effect";
+import { project } from "./projection.js";
+import { GlobalState, AgentId, LocationId } from "./model.js";
+import { LLMService, LLMServiceMock } from "./llm.js";
 
-describe("Projection (pi)", () => {
-    const mockState: GlobalState = {
-        tick: 10,
-        agents: {
-            ["agent_1" as AgentId]: {
-                id: "agent_1" as AgentId,
-                name: "Alice",
-                description: "A wanderer",
-                locationId: "loc_0" as LocationId,
-                memory: {}
-            }
-        },
-        locations: {
-            ["loc_0" as LocationId]: {
-                id: "loc_0" as LocationId,
-                name: "Home",
-                description: "Sweet home"
-            }
-        }
-    };
+describe("Projection", () => {
+    it("should use LLM to generate description", async () => {
+        const state: GlobalState = {
+            tick: 10,
+            agents: {
+                ["agent_1" as AgentId]: {
+                    id: "agent_1" as AgentId,
+                    name: "Alice",
+                    description: "Explorer",
+                    locationId: "loc_0" as LocationId,
+                    status: "Idle",
+                    memory: {},
+                },
+            },
+            locations: {
+                ["loc_0" as LocationId]: { id: "loc_0" as LocationId, name: "Home", description: "Sweet home" },
+            },
+            history: ["Something happened"],
+        };
 
-    it("should generate a correct text description for the agent", () => {
-        const view = project(mockState, "agent_1" as AgentId);
+        // Create the program
+        const program = project(state, "agent_1" as AgentId).pipe(
+            Effect.provideServiceEffect(LLMService, LLMServiceMock)
+        );
 
-        expect(view.description).toContain("You are Alice (A wanderer)");
-        expect(view.description).toContain("You are currently at Home (Sweet home)");
-        expect(view.description).toContain("Current Tick: 10");
-        expect(view.rawData).toEqual(mockState);
+        // Run it
+        const view = await Effect.runPromise(program);
+
+        expect(view.description).toContain("Mock response"); // LLMServiceMock returns this
+        expect(view.rawData.tick).toBe(10);
     });
 
-    it("should handle non-existent agents", () => {
-        const view = project(mockState, "agent_999" as AgentId);
+    it("should handle non-existent agent", async () => {
+        const state: GlobalState = {
+            tick: 0,
+            agents: {},
+            locations: {},
+            history: [],
+        };
+
+        const program = project(state, "missing" as AgentId).pipe(
+            Effect.provideServiceEffect(LLMService, LLMServiceMock)
+        );
+
+        const view = await Effect.runPromise(program);
         expect(view.description).toBe("You do not exist.");
     });
 });

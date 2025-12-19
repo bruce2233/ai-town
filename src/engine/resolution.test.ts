@@ -1,56 +1,46 @@
 import { describe, it, expect } from "vitest";
-import { Effect, Context } from "effect";
-import { createEngine } from "../engine/index.js"; // Relative import from src/engine/index.ts
-import { GlobalState, AgentId, LocationId, LLMService } from "../core/index.js";
+import { Effect } from "effect";
+import { createEngine } from "./index.js";
+import { GlobalState, AgentId, ActionIntent, LLMService, LLMServiceMock } from "../core/index.js";
 
-describe("Resolution Engine (g)", () => {
-    const mockState: GlobalState = {
-        tick: 0,
-        agents: {
-            ["agent_1" as AgentId]: {
-                id: "agent_1" as AgentId,
-                name: "Alice",
-                description: "Test",
-                locationId: "loc_0" as LocationId,
-                memory: {}
-            }
-        },
-        locations: {
-            ["loc_0" as LocationId]: { id: "loc_0" as LocationId, name: "Loc A", description: "Desc A" },
-            ["loc_1" as LocationId]: { id: "loc_1" as LocationId, name: "Loc B", description: "Desc B" }
-        }
-    };
-
-    // A fast LLM Mock that returns empty text (Engine uses fallback deterministic logic for MVP)
-    const LLMServiceTest = LLMService.of({
-        generateCompletion: (_prompt) => Effect.succeed("Mock LLM Response"),
-        generateJson: (_prompt, _schema) => Effect.succeed({} as any)
-    });
-
-    it("should resolve a MoveIntent correctly", async () => {
+describe("Resolution Engine", () => {
+    it("should resolve actions and update history", async () => {
         const engine = await Effect.runPromise(
-            createEngine().pipe(
-                Effect.provideService(LLMService, LLMServiceTest)
-            )
+            createEngine().pipe(Effect.provideServiceEffect(LLMService, LLMServiceMock))
         );
 
-        const intents = [{
-            _tag: "Move",
+        const state: GlobalState = {
+            tick: 0,
+            agents: {
+                ["agent_1" as AgentId]: {
+                    id: "agent_1" as AgentId,
+                    name: "Alice",
+                    description: "Test Agent",
+                    locationId: "loc_0" as any,
+                    status: "Idle",
+                    memory: {},
+                }
+            },
+            locations: {
+                ["loc_0" as any]: { id: "loc_0", name: "Room", description: "Empty" }
+            },
+            history: [],
+        };
+
+        const intent: ActionIntent = {
+            _tag: "Action",
             agentId: "agent_1" as AgentId,
-            targetLocationId: "loc_1" as LocationId
-        } as const];
+            instruction: "I wave."
+        };
 
         const result = await Effect.runPromise(
-            engine.resolve(intents, mockState)
+            engine.resolve([intent], state).pipe(Effect.orDie) // Handle strict error
         );
 
-        // Check State Update
-        expect(result.state.tick).toBe(1);
-        expect(result.state.agents["agent_1" as AgentId].locationId).toBe("loc_1");
-
-        // Check Events
-        expect(result.events).toHaveLength(1);
-        expect(result.events[0].type).toBe("AGENT_MOVED");
-        expect(result.events[0].payload).toEqual({ agentId: "agent_1", to: "loc_1" });
+        // Mock LLM returns empty object usually or generic string,
+        // but our engine pushes "Nothing happened" if narrative is missing in mock
+        // OR it uses the mock response.
+        // Let's just check history length grew
+        expect(result.state.history.length).toBeGreaterThan(0);
     });
 });

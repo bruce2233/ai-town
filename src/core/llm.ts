@@ -34,6 +34,7 @@ const fetchCompletion = (prompt: string, jsonMode: boolean = false) =>
                 { role: "user", content: prompt }
             ];
 
+            console.log(`[Real LLM] Requesting: ${prompt.substring(0, 50)}...`);
             const response = await fetch("http://192.168.31.21:8082/v1/chat/completions", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
