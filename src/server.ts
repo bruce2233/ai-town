@@ -20,7 +20,8 @@ const ServerLive = HttpRouter.empty.pipe(
         allowedOrigins: ["*"], // Allow all for dev
         allowedMethods: ["GET", "OPTIONS", "POST"]
     })),
-    HttpServer.serve(HttpMiddleware.logger),
+    // HttpServer.serve(HttpMiddleware.logger), // Removed to reduce console noise
+    HttpServer.serve(),
     HttpServer.withLogAddress
 );
 
