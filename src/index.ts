@@ -1,4 +1,4 @@
-import { Effect, Console } from "effect";
+import { Effect, Console, Layer, Ref } from "effect";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { GlobalState, AgentId } from "./core/model.js";
@@ -8,6 +8,9 @@ import { createLLMAgent } from "./agents/index.js";
 import { project } from "./core/projection.js";
 import { LLMService, LLMServiceLive, LLMServiceMock } from "./core/llm.js";
 import { generateWorld } from "./core/world_gen.js";
+import { ApiServerLive } from "./server.js";
+import { StateManager, StateManagerLive } from "./core/state_manager.js";
+import { NodeRuntime } from "@effect/platform-node";
 
 // ---------------------------------------------
 // AI Town Simulation Loop
@@ -16,19 +19,18 @@ import { generateWorld } from "./core/world_gen.js";
 const runSimulation = (initialState: GlobalState) => Effect.gen(function* (_) {
     yield* Console.log("Initializing AI Town (LLM Powered)...");
 
-    // Engine is already Effect<ResolutionEngine...>, wait, createEngine return Engine directly or Effect?
-    // According to resolution.test.ts: createEngine() returns Effect<ResolutionEngine>
     const engine = yield* createEngine();
     let state = initialState;
 
     // Create Agents
-    // createLLMAgent returns Effect<Agent, never, LLMService>.
     const agentInstances = yield* Effect.all(
         Object.keys(state.agents).map(id => createLLMAgent(id as AgentId))
     );
 
-    // Simulation Loop
-    for (let i = 0; i < 5; i++) {
+    // Simulation Loop (Infinite)
+    let i = 0;
+    while (true) {
+        i++;
         yield* Console.log(`\n--- Tick ${state.tick} ---`);
         if (state.history.length > 0) {
             yield* Console.log(`NARRATIVE: ${state.history[state.history.length - 1]}`);
@@ -44,9 +46,6 @@ const runSimulation = (initialState: GlobalState) => Effect.gen(function* (_) {
             intents.push(intent);
 
             if (intent._tag === "Action") {
-                // Explicitly cast to ActionIntent if TS isn't narrowing automatically for some reason in this context
-                // The union is discriminated by _tag, it should work.
-                // But let's be safe.
                 const action = intent as ActionIntent;
                 yield* Console.log(`Agent ${agent.id} decided to: "${action.instruction}"`);
             } else {
@@ -57,6 +56,10 @@ const runSimulation = (initialState: GlobalState) => Effect.gen(function* (_) {
         // 3. Resolution (State Update)
         const result = yield* engine.resolve(intents, state);
         state = result.state;
+
+        // Push update to usage StateManager
+        const stateRef = yield* StateManager;
+        yield* Ref.set(stateRef, state);
     }
 
     yield* Console.log("\nSimulation finished.");
@@ -101,8 +104,26 @@ const program = Effect.gen(function* (_) {
 });
 
 const useMock = process.env.USE_MOCK === "true";
-const LLMProvider = useMock ? LLMServiceMock : LLMServiceLive;
+// Convert LLM Effect Service to Layer
+const LLMLayer = Layer.effect(
+    LLMService,
+    useMock ? LLMServiceMock : LLMServiceLive
+);
 
 console.log(`Using ${useMock ? "MOCK" : "REAL"} LLM Service.`);
 
-Effect.runPromise(program.pipe(Effect.provideServiceEffect(LLMService, LLMProvider), Effect.orDie));
+// Compose Layers:
+// 1. BaseLayer = LLM + StateManager (Shared)
+const BaseLayer = Layer.merge(LLMLayer, StateManagerLive);
+
+// 2. ApiServer needs StateManager (from BaseLayer)
+// 3. Program needs StateManager + LLM (from BaseLayer)
+// So we merge ApiServer (with dependencies satisfied) and BaseLayer.
+const MainLayer = ApiServerLive.pipe(
+    Layer.provide(BaseLayer),
+    Layer.merge(BaseLayer)
+);
+
+NodeRuntime.runMain(program.pipe(
+    Effect.provide(MainLayer)
+));
