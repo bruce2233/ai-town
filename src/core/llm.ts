@@ -42,7 +42,7 @@ const fetchCompletion = (prompt: string, jsonMode: boolean = false) =>
                     model: "/home/zyp/app/data/Qwen3-4B-Instruct-2507-AWQ-4bit/",
                     messages,
                     temperature: jsonMode ? 0.2 : 0.7,
-                    max_tokens: 250 // Increased for safety
+                    max_tokens: 2048 // Increased for JSON generation
                 }),
             });
 

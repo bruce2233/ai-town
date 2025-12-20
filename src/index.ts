@@ -1,57 +1,33 @@
 import { Effect, Console } from "effect";
-import { GlobalState, AgentId, LocationId, AgentState, project, LLMService, LLMServiceLive, LLMServiceMock } from "./core/index.js";
+import { createInterface } from "node:readline/promises";
+import { stdin as input, stdout as output } from "node:process";
+import { GlobalState, AgentId } from "./core/model.js";
+import { ActionIntent } from "./core/intent.js";
 import { createEngine } from "./engine/index.js";
 import { createLLMAgent } from "./agents/index.js";
-import { PromptEngineLive, AssetManagerMock } from "./media/index.js";
+import { project } from "./core/projection.js";
+import { LLMService, LLMServiceLive, LLMServiceMock } from "./core/llm.js";
+import { generateWorld } from "./core/world_gen.js";
 
 // ---------------------------------------------
-// MVP CLI (LLM Powered)
+// AI Town Simulation Loop
 // ---------------------------------------------
 
-const runSimulation = Effect.gen(function* (_) {
+const runSimulation = (initialState: GlobalState) => Effect.gen(function* (_) {
     yield* Console.log("Initializing AI Town (LLM Powered)...");
 
-    // 1. Initialize State
-    let state: GlobalState = {
-        tick: 0,
-        agents: {
-            ["agent_1" as AgentId]: {
-                id: "agent_1" as AgentId,
-                name: "Alice",
-                description: "A wanderer looking for secrets.",
-                locationId: "loc_0" as LocationId,
-                status: "Checking her map",
-                memory: {},
-            },
-            ["agent_2" as AgentId]: {
-                id: "agent_2" as AgentId,
-                name: "Bob",
-                description: "A merchant looking for customers.",
-                locationId: "loc_1" as LocationId,
-                status: "Setting up his stall",
-                memory: {},
-            },
-        },
-        locations: {
-            ["loc_0" as LocationId]: { id: "loc_0" as LocationId, name: "Home", description: "Sweet home" },
-            ["loc_1" as LocationId]: { id: "loc_1" as LocationId, name: "Park", description: "Green grass" },
-            ["loc_2" as LocationId]: { id: "loc_2" as LocationId, name: "Shop", description: "Buy things" },
-            ["loc_3" as LocationId]: { id: "loc_3" as LocationId, name: "Forest", description: "Dark trees" },
-            ["loc_4" as LocationId]: { id: "loc_4" as LocationId, name: "Lake", description: "Blue water" }
-        },
-        history: []
-    };
-
-    // Create dependencies
-    const agent1 = yield* createLLMAgent("agent_1" as AgentId);
-    const agent2 = yield* createLLMAgent("agent_2" as AgentId);
-    const agents = [agent1, agent2];
-
-    const promptEngine = yield* PromptEngineLive;
-    const assetManager = yield* AssetManagerMock;
+    // Engine is already Effect<ResolutionEngine...>, wait, createEngine return Engine directly or Effect?
+    // According to resolution.test.ts: createEngine() returns Effect<ResolutionEngine>
     const engine = yield* createEngine();
+    let state = initialState;
 
-    // 2. Game Loop (5 ticks)
+    // Create Agents
+    // createLLMAgent returns Effect<Agent, never, LLMService>.
+    const agentInstances = yield* Effect.all(
+        Object.keys(state.agents).map(id => createLLMAgent(id as AgentId))
+    );
+
+    // Simulation Loop
     for (let i = 0; i < 5; i++) {
         yield* Console.log(`\n--- Tick ${state.tick} ---`);
         if (state.history.length > 0) {
@@ -59,48 +35,74 @@ const runSimulation = Effect.gen(function* (_) {
         }
 
         const intents = [];
-        for (const agent of agents) {
+        for (const agent of agentInstances) {
             // 2a. Projection (Text Description)
             const view = yield* project(state, agent.id);
 
             // 2b. Policy (LLM Decision)
             const intent = yield* agent.act(view);
             intents.push(intent);
-        }
-        for (const intent of intents) {
+
             if (intent._tag === "Action") {
-                Console.log(`Agent ${intent.agentId} decided to: "${intent.instruction}"`).pipe(Effect.runSync);
-            } else if (intent._tag === "Move") {
-                Console.log(`Agent ${intent.agentId} decided to Move to ${intent.targetLocationId}`).pipe(Effect.runSync);
+                // Explicitly cast to ActionIntent if TS isn't narrowing automatically for some reason in this context
+                // The union is discriminated by _tag, it should work.
+                // But let's be safe.
+                const action = intent as ActionIntent;
+                yield* Console.log(`Agent ${agent.id} decided to: "${action.instruction}"`);
+            } else {
+                yield* Console.log(`Agent ${agent.id} decided to: "${intent._tag}"`);
             }
         }
-        // 2c. Resolution (LLM DM)
+
+        // 3. Resolution (State Update)
         const result = yield* engine.resolve(intents, state);
         state = result.state;
-
-        // 2d. Events & Media Generation
-        for (const event of result.events) {
-            yield* Console.log(`EVENT: ${event.type} -> ${JSON.stringify(event.payload)}`);
-
-            // Generate Prompts from Event
-            const prompts = yield* promptEngine.generatePrompts(event, state);
-            for (const prompt of prompts) {
-                yield* Console.log(`  -> GEN_PROMPT [${prompt.assetType}]: ${prompt.promptText}`);
-
-                // Generate Asset
-                const asset = yield* assetManager.generateAsset(prompt);
-                yield* Console.log(`  -> ASSET_READY: ${asset.url}`);
-            }
-        }
     }
 
     yield* Console.log("\nSimulation finished.");
+    return state;
 });
 
-// Provide the Service to the Main Effect based on Env Var
+// ---------------------------------------------
+// MVP CLI (LLM Powered)
+// ---------------------------------------------
+
+const program = Effect.gen(function* (_) {
+    // CLI Interaction
+    const rl = createInterface({ input, output });
+
+    yield* Console.log(`
+╔════════════════════════════════════════╗
+║         AI TOWN SIMULATION             ║
+╚════════════════════════════════════════╝
+`);
+
+    const language = yield* Effect.tryPromise(() => rl.question("Language (default: English): ")).pipe(
+        Effect.map((ans: any) => (ans as string).trim() || "English")
+    );
+    const theme = yield* Effect.tryPromise(() => rl.question("Theme (default: Standard): ")).pipe(
+        Effect.map((ans: any) => (ans as string).trim() || "Standard Town")
+    );
+    const countStr = yield* Effect.tryPromise(() => rl.question("Agent Count (default: 3): ")).pipe(
+        Effect.map((ans: any) => (ans as string).trim() || "3")
+    );
+    const agentCount = parseInt(countStr) || 3;
+
+    rl.close();
+
+    yield* Console.log(`\nGenerating World (${theme}, ${language}, ${agentCount} agents)... Please wait...`);
+
+    // Generate Initial State
+    const initialState = yield* generateWorld({ theme, language, agentCount });
+
+    yield* Console.log("World Generated Successfully!");
+
+    return yield* runSimulation(initialState);
+});
+
 const useMock = process.env.USE_MOCK === "true";
 const LLMProvider = useMock ? LLMServiceMock : LLMServiceLive;
 
 console.log(`Using ${useMock ? "MOCK" : "REAL"} LLM Service.`);
 
-Effect.runPromise(runSimulation.pipe(Effect.provideServiceEffect(LLMService, LLMProvider), Effect.orDie));
+Effect.runPromise(program.pipe(Effect.provideServiceEffect(LLMService, LLMProvider), Effect.orDie));
